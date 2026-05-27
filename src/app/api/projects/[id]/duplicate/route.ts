@@ -1,22 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { PLAN_LIMITS } from "@/types";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Find the original project (must belong to user)
     const original = await prisma.project.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
 
     if (!original) {
@@ -25,7 +24,7 @@ export async function POST(
 
     // Check plan limits
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: { plan: true },
     });
 
@@ -37,7 +36,7 @@ export async function POST(
 
     if (planLimits.maxProjects !== -1) {
       const projectCount = await prisma.project.count({
-        where: { userId: session.user.id },
+        where: { userId: userId },
       });
 
       if (projectCount >= planLimits.maxProjects) {
@@ -51,7 +50,7 @@ export async function POST(
     // Create duplicate
     const project = await prisma.project.create({
       data: {
-        userId: session.user.id,
+        userId: userId,
         name: `Copy of ${original.name}`,
         settings: original.settings ?? {},
       },

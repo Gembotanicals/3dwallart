@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { uploadFile, generateKey } from "@/lib/r2";
 import { PLAN_LIMITS } from "@/types";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +11,8 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -42,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // Get user and check quota
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
     });
 
     if (!user) {

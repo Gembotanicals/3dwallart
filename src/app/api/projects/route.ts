@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { PLAN_LIMITS } from "@/types";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 const ITEMS_PER_PAGE = 12;
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -23,7 +22,7 @@ export async function GET(request: NextRequest) {
     const sortField = validSorts.includes(sort) ? sort : "updatedAt";
     const sortOrder = sortField === "name" ? "asc" : "desc";
 
-    const where: any = { userId: session.user.id };
+    const where: any = { userId: userId };
     if (search) {
       where.name = { contains: search, mode: "insensitive" };
     }
@@ -61,14 +60,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Check plan limits
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: { plan: true },
     });
 
@@ -80,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     if (planLimits.maxProjects !== -1) {
       const projectCount = await prisma.project.count({
-        where: { userId: session.user.id },
+        where: { userId: userId },
       });
 
       if (projectCount >= planLimits.maxProjects) {
@@ -97,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     const project = await prisma.project.create({
       data: {
-        userId: session.user.id,
+        userId: userId,
         name,
         settings: settings as any,
       },

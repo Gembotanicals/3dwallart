@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { addExportJob } from "@/lib/queue";
 import { PLAN_LIMITS } from "@/types";
 import type { ServerReliefSettings } from "@/lib/relief-engine-server";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -32,7 +31,7 @@ export async function POST(req: NextRequest) {
 
     // Fetch user plan
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: { plan: true },
     });
     if (!user) {
@@ -54,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     // Verify project ownership
     const project = await prisma.project.findFirst({
-      where: { id: projectId, userId: session.user.id },
+      where: { id: projectId, userId: userId },
     });
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -117,8 +116,8 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -135,7 +134,7 @@ export async function GET(req: NextRequest) {
     const exports = await prisma.export.findMany({
       where: {
         id: { in: exportIds },
-        project: { userId: session.user.id },
+        project: { userId: userId },
       },
     });
 

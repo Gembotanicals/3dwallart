@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Archivo, Space_Mono } from "next/font/google";
 import "./globals.css";
-import SessionProvider from "@/components/providers/SessionProvider";
+import { ClerkProvider } from "@clerk/nextjs";
 import { ToastContainer } from "@/components/ui/Toast";
 
 const archivo = Archivo({
@@ -46,21 +46,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${archivo.variable} ${spaceMono.variable}`}>
-      <head>
-        <meta name="theme-color" content="#101417" />
-        <link rel="manifest" href="/manifest.json" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className="min-h-screen bg-bg text-ink font-sans grid-bg antialiased">
-        <SessionProvider>
+    <ClerkProvider>
+      <html lang="en" className={`${archivo.variable} ${spaceMono.variable}`}>
+        <head>
+          <meta name="theme-color" content="#101417" />
+          <link rel="manifest" href="/manifest.json" />
+          <link
+            href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap"
+            rel="stylesheet"
+          />
+        </head>
+        <body className="min-h-screen bg-bg text-ink font-sans grid-bg antialiased">
           {children}
           <ToastContainer />
-        </SessionProvider>
-      </body>
-    </html>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useUser, useClerk } from '@clerk/nextjs';
 
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -12,12 +12,14 @@ const NAV_LINKS = [
 ];
 
 export default function AppHeader() {
-  const { data: session } = useSession();
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
   const pathname = usePathname();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  const user = session?.user;
+  const userName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'User';
+  const userEmail = user?.primaryEmailAddress?.emailAddress || '';
 
   const isActive = (href: string) => {
     return pathname === href || pathname.startsWith(href + '/');
@@ -55,86 +57,79 @@ export default function AppHeader() {
       {/* Right side */}
       <div className="flex items-center gap-3">
         {/* User menu */}
-        <div className="relative">
-          <button
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-panel transition-colors"
-          >
-            <div className="w-7 h-7 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center">
-              <span className="text-xs font-bold text-accent">
-                {(user?.name || user?.email || 'U').charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <span className="hidden sm:inline font-mono text-xs text-dim max-w-[100px] truncate">
-              {user?.name || user?.email || 'User'}
-            </span>
-            <svg
-              className="w-3 h-3 text-dim"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+        {isLoaded && isSignedIn && (
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-panel transition-colors"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {/* Dropdown */}
-          {showUserMenu && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setShowUserMenu(false)}
-              />
-              <div className="absolute right-0 top-full mt-1 w-56 bg-panel border border-line rounded-lg shadow-xl z-50 py-1">
-                {/* User info */}
-                <div className="px-4 py-3 border-b border-line">
-                  {user?.name && (
-                    <p className="font-sans text-sm text-ink font-medium truncate">
-                      {user.name}
-                    </p>
-                  )}
-                  <p className="font-mono text-xs text-dim truncate">
-                    {user?.email}
-                  </p>
-                  {user?.plan && (
-                    <span className={`inline-block mt-1.5 font-mono text-[10px] px-2 py-0.5 rounded-full border ${
-                      user.plan === 'PRO'
-                        ? 'border-accent/30 text-accent bg-accent/10'
-                        : 'border-line text-dim bg-panel2'
-                    }`}>
-                      {user.plan}
-                    </span>
-                  )}
-                </div>
-
-                {/* Menu items */}
-                <Link
-                  href="/settings"
-                  onClick={() => setShowUserMenu(false)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-panel2 transition-colors"
-                >
-                  Settings
-                </Link>
-                <Link
-                  href="/settings/billing"
-                  onClick={() => setShowUserMenu(false)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-panel2 transition-colors"
-                >
-                  Billing
-                </Link>
-
-                <div className="border-t border-line my-1" />
-
-                <button
-                  onClick={() => signOut({ callbackUrl: '/login' })}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-dim hover:text-red-400 hover:bg-panel2 w-full transition-colors"
-                >
-                  Sign out
-                </button>
+              <div className="w-7 h-7 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center">
+                <span className="text-xs font-bold text-accent">
+                  {(userName || 'U').charAt(0).toUpperCase()}
+                </span>
               </div>
-            </>
-          )}
-        </div>
+              <span className="hidden sm:inline font-mono text-xs text-dim max-w-[100px] truncate">
+                {userName}
+              </span>
+              <svg
+                className="w-3 h-3 text-dim"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Dropdown */}
+            {showUserMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowUserMenu(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 w-56 bg-panel border border-line rounded-lg shadow-xl z-50 py-1">
+                  {/* User info */}
+                  <div className="px-4 py-3 border-b border-line">
+                    {user?.fullName && (
+                      <p className="font-sans text-sm text-ink font-medium truncate">
+                        {user.fullName}
+                      </p>
+                    )}
+                    <p className="font-mono text-xs text-dim truncate">
+                      {userEmail}
+                    </p>
+                  </div>
+
+                  {/* Menu items */}
+                  <Link
+                    href="/settings"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-panel2 transition-colors"
+                  >
+                    Settings
+                  </Link>
+                  <Link
+                    href="/settings/billing"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-panel2 transition-colors"
+                  >
+                    Billing
+                  </Link>
+
+                  <div className="border-t border-line my-1" />
+
+                  <button
+                    onClick={() => { signOut(); window.location.href = '/login'; }}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-dim hover:text-red-400 hover:bg-panel2 w-full transition-colors"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Mobile hamburger */}
         <button

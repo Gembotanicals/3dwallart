@@ -1,16 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
 
 const DISMISS_KEY = "reliefforge-upgrade-banner-dismissed";
 
 export default function UpgradeBanner() {
-  const { data: session } = useSession();
+  const { isSignedIn } = useUser();
   const [dismissed, setDismissed] = useState(true);
-
-  const userPlan = (session?.user as any)?.plan || "FREE";
+  const [userPlan, setUserPlan] = useState("FREE");
 
   useEffect(() => {
     const isDismissed = localStorage.getItem(DISMISS_KEY);
@@ -18,6 +17,21 @@ export default function UpgradeBanner() {
       setDismissed(false);
     }
   }, []);
+
+  useEffect(() => {
+    async function fetchPlan() {
+      try {
+        const res = await fetch("/api/user");
+        if (res.ok) {
+          const data = await res.json();
+          setUserPlan(data.plan || "FREE");
+        }
+      } catch {
+        // silent
+      }
+    }
+    if (isSignedIn) fetchPlan();
+  }, [isSignedIn]);
 
   const handleDismiss = () => {
     localStorage.setItem(DISMISS_KEY, "true");

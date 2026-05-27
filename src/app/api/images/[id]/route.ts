@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { deleteFile, extractKeyFromUrl } from "@/lib/r2";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +10,15 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const image = await prisma.image.findFirst({
       where: {
         id: params.id,
-        userId: session.user.id,
+        userId: userId,
       },
     });
 
@@ -42,15 +41,15 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const image = await prisma.image.findFirst({
       where: {
         id: params.id,
-        userId: session.user.id,
+        userId: userId,
       },
     });
 
@@ -82,7 +81,7 @@ export async function DELETE(
 
     // Update user storage
     await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: userId },
       data: {
         storageUsed: {
           decrement: image.sizeBytes,

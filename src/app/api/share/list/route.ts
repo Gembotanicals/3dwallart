@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -22,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     // Verify ownership
     const project = await prisma.project.findFirst({
-      where: { id: projectId, userId: session.user.id },
+      where: { id: projectId, userId: userId },
       select: { id: true },
     });
 

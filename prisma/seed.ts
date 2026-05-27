@@ -13,7 +13,7 @@ async function main() {
     create: {
       email: "demo@reliefforge.com",
       name: "Demo User",
-      emailVerified: new Date(),
+      clerkId: "clerk_demo_seed",
       plan: Plan.PRO,
       storageUsed: 15_728_640, // ~15 MB
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=demo",

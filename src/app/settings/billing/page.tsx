@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSession } from "next-auth/react";
+import { useUser } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { PLAN_LIMITS } from "@/types";
 import { formatBytes } from "@/lib/utils";
@@ -42,23 +42,22 @@ const featureRows = [
 ];
 
 function BillingContent() {
-  const { data: session, status } = useSession();
+  const { isLoaded, isSignedIn } = useUser();
   const searchParams = useSearchParams();
   const [yearly, setYearly] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
-  const [usage, setUsage] = useState<{ projects: number; storage: number }>({
+  const [usage, setUsage] = useState<{ projects: number; storage: number; plan: string }>({
     projects: 0,
     storage: 0,
+    plan: "FREE",
   });
 
-  const userPlan = (session?.user as any)?.plan || "FREE";
-  const userId = (session?.user as any)?.id;
+  const userPlan = usage.plan;
 
   const success = searchParams.get("success");
   const canceled = searchParams.get("canceled");
 
   useEffect(() => {
-    // Fetch usage stats
     async function fetchUsage() {
       try {
         const res = await fetch("/api/user");
@@ -67,14 +66,15 @@ function BillingContent() {
           setUsage({
             projects: data.projectCount ?? 0,
             storage: data.storageUsed ?? 0,
+            plan: data.plan ?? "FREE",
           });
         }
       } catch {
         // silent
       }
     }
-    if (userId) fetchUsage();
-  }, [userId]);
+    if (isSignedIn) fetchUsage();
+  }, [isSignedIn]);
 
   const handleCheckout = async (priceId: string, plan: "PRO" | "TEAM") => {
     setLoading(plan);
@@ -110,7 +110,7 @@ function BillingContent() {
     }
   };
 
-  if (status === "loading") {
+  if (!isLoaded) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-pulse text-dim font-mono text-sm">

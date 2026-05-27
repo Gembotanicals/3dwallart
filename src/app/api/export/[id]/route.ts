@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { deleteFile, extractKeyFromUrl } from "@/lib/r2";
 import { stlQueue } from "@/lib/queue";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -24,7 +23,7 @@ export async function GET(
       return NextResponse.json({ error: "Export not found" }, { status: 404 });
     }
 
-    if (exportRecord.project.userId !== session.user.id) {
+    if (exportRecord.project.userId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -70,8 +69,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -84,7 +83,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Export not found" }, { status: 404 });
     }
 
-    if (exportRecord.project.userId !== session.user.id) {
+    if (exportRecord.project.userId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

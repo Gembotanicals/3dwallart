@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import bcrypt from "bcrypt";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export async function GET(
   request: NextRequest,
@@ -98,8 +97,8 @@ export async function DELETE(
   { params }: { params: { token: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -117,7 +116,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    if (shareLink.project.userId !== session.user.id) {
+    if (shareLink.project.userId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

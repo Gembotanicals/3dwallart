@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { uploadFile, generateKey, deleteFile, extractKeyFromUrl } from "@/lib/r2";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const project = await prisma.project.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
 
     if (!project) {
@@ -49,7 +48,7 @@ export async function POST(
 
     // Upload to R2
     const ext = contentType.includes("png") ? "png" : "jpg";
-    const key = generateKey(session.user.id, `thumbnails/${params.id}.${ext}`);
+    const key = generateKey(userId, `thumbnails/${params.id}.${ext}`);
     const url = await uploadFile(key, buffer, contentType);
 
     // Update project

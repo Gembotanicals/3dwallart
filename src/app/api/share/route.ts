@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { PLAN_LIMITS } from "@/types";
 import bcrypt from "bcrypt";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -24,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     // Verify user owns the project
     const project = await prisma.project.findFirst({
-      where: { id: projectId, userId: session.user.id },
+      where: { id: projectId, userId: userId },
       select: { id: true },
     });
 
@@ -37,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     // Check plan allows sharing
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: { plan: true },
     });
 

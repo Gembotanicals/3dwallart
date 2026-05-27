@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
+import { useUser } from '@clerk/nextjs';
 import AppHeader from '@/components/layout/AppHeader';
 import { DashboardEmpty } from '@/components/onboarding/EmptyStates';
 import { SkeletonGrid } from '@/components/ui/Skeleton';
@@ -21,7 +21,7 @@ interface Project {
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
+  const { isLoaded } = useUser();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -112,7 +112,6 @@ export default function DashboardPage() {
             <h1 className="font-heading text-2xl text-ink">My Projects</h1>
             <p className="font-mono text-xs text-dim mt-1">
               {total} project{total !== 1 ? 's' : ''}
-              {session?.user?.plan === 'FREE' && ' · Free plan (3 max)'}
             </p>
           </div>
           <button

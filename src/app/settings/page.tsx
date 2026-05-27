@@ -1,11 +1,41 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useState, useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
 
 export default function SettingsPage() {
-  const { data: session } = useSession();
-  const userPlan = (session?.user as any)?.plan || "FREE";
+  const { isLoaded, isSignedIn } = useUser();
+  const [userData, setUserData] = useState<{
+    name: string | null;
+    email: string;
+    plan: string;
+  } | null>(null);
+
+  useEffect(() => {
+    async function fetchUser() {
+      try {
+        const res = await fetch("/api/user");
+        if (res.ok) {
+          const data = await res.json();
+          setUserData(data);
+        }
+      } catch {
+        // silent
+      }
+    }
+    if (isSignedIn) fetchUser();
+  }, [isSignedIn]);
+
+  const userPlan = userData?.plan || "FREE";
+
+  if (!isLoaded) {
+    return (
+      <main className="min-h-screen p-8 max-w-3xl mx-auto">
+        <div className="animate-pulse text-dim font-mono text-sm">Loading...</div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen p-8 max-w-3xl mx-auto">
@@ -21,12 +51,12 @@ export default function SettingsPage() {
           <div className="flex justify-between">
             <span className="text-dim">Name</span>
             <span className="text-ink">
-              {session?.user?.name || "Not set"}
+              {userData?.name || "Not set"}
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-dim">Email</span>
-            <span className="text-ink">{session?.user?.email}</span>
+            <span className="text-ink">{userData?.email}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-dim">Plan</span>

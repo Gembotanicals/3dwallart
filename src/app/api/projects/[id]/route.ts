@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { deleteFile, extractKeyFromUrl } from "@/lib/r2";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 async function getProjectWithAuth(id: string, userId: string) {
   const project = await prisma.project.findFirst({
@@ -16,13 +15,13 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const project = await prisma.project.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
       include: {
         exports: { orderBy: { createdAt: "desc" } },
         shareLinks: { orderBy: { createdAt: "desc" } },
@@ -45,12 +44,12 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const existing = await getProjectWithAuth(params.id, session.user.id);
+    const existing = await getProjectWithAuth(params.id, userId);
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -85,12 +84,12 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const project = await getProjectWithAuth(params.id, session.user.id);
+    const project = await getProjectWithAuth(params.id, userId);
     if (!project) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }

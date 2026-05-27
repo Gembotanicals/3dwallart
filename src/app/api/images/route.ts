@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +8,8 @@ const PAGE_SIZE = 20;
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -21,7 +20,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * PAGE_SIZE;
 
     const where = {
-      userId: session.user.id,
+      userId: userId,
       ...(search && {
         originalName: {
           contains: search,
