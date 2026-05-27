@@ -9,12 +9,12 @@ export default function CTASection() {
           Join thousands of makers turning photos into physical art. Free to start, no credit card required.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-          <button className="px-10 py-4 text-sm font-mono uppercase tracking-wider text-white bg-accent rounded-sm hover:bg-accent/90 hover:scale-[1.02] transition-all shadow-lg shadow-accent/20">
+          <a href="/signup" className="px-10 py-4 text-sm font-mono uppercase tracking-wider text-white bg-accent rounded-sm hover:bg-accent/90 hover:scale-[1.02] transition-all shadow-lg shadow-accent/20 text-center">
             Get Started Free
-          </button>
-          <button className="px-10 py-4 text-sm font-mono uppercase tracking-wider text-ink border border-line rounded-sm hover:border-accent2 hover:text-accent2 transition-all">
+          </a>
+          <a href="#pricing" className="px-10 py-4 text-sm font-mono uppercase tracking-wider text-ink border border-line rounded-sm hover:border-accent2 hover:text-accent2 transition-all text-center">
             View Pricing
-          </button>
+          </a>
         </div>
       </div>
     </section>

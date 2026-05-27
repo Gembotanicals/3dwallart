@@ -29,12 +29,12 @@ export default function Navbar() {
 
           {/* Desktop buttons */}
           <div className="hidden md:flex items-center gap-3">
-            <button className="px-4 py-2 text-sm font-mono uppercase tracking-wider text-dim border border-line rounded-sm hover:border-ink hover:text-ink transition-colors">
+            <a href="/login" className="px-4 py-2 text-sm font-mono uppercase tracking-wider text-dim border border-line rounded-sm hover:border-ink hover:text-ink transition-colors">
               Sign In
-            </button>
-            <button className="px-4 py-2 text-sm font-mono uppercase tracking-wider text-white bg-accent rounded-sm hover:bg-accent/90 transition-colors">
+            </a>
+            <a href="/signup" className="px-4 py-2 text-sm font-mono uppercase tracking-wider text-white bg-accent rounded-sm hover:bg-accent/90 transition-colors">
               Get Started Free
-            </button>
+            </a>
           </div>
 
           {/* Mobile menu button */}
@@ -66,12 +66,12 @@ export default function Navbar() {
               Pricing
             </a>
             <div className="pt-3 space-y-2">
-              <button className="w-full px-4 py-2 text-sm font-mono uppercase tracking-wider text-dim border border-line rounded-sm hover:border-ink hover:text-ink transition-colors">
+              <a href="/login" className="block w-full px-4 py-2 text-sm font-mono uppercase tracking-wider text-dim border border-line rounded-sm hover:border-ink hover:text-ink transition-colors text-center">
                 Sign In
-              </button>
-              <button className="w-full px-4 py-2 text-sm font-mono uppercase tracking-wider text-white bg-accent rounded-sm hover:bg-accent/90 transition-colors">
+              </a>
+              <a href="/signup" className="block w-full px-4 py-2 text-sm font-mono uppercase tracking-wider text-white bg-accent rounded-sm hover:bg-accent/90 transition-colors text-center">
                 Get Started Free
-              </button>
+              </a>
             </div>
           </div>
         )}

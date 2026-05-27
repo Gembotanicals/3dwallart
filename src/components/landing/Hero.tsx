@@ -44,12 +44,12 @@ export default function Hero() {
 
           {/* CTAs */}
           <div className="mt-10 flex flex-col sm:flex-row gap-4">
-            <button className="px-8 py-4 text-sm font-mono uppercase tracking-wider text-white bg-accent rounded-sm hover:bg-accent/90 hover:scale-[1.02] transition-all shadow-lg shadow-accent/20">
+            <a href="/signup" className="px-8 py-4 text-sm font-mono uppercase tracking-wider text-white bg-accent rounded-sm hover:bg-accent/90 hover:scale-[1.02] transition-all shadow-lg shadow-accent/20 text-center">
               Start Free — No Card Required
-            </button>
-            <button className="px-8 py-4 text-sm font-mono uppercase tracking-wider text-ink border border-line rounded-sm hover:border-accent2 hover:text-accent2 transition-all">
+            </a>
+            <a href="#how-it-works" className="px-8 py-4 text-sm font-mono uppercase tracking-wider text-ink border border-line rounded-sm hover:border-accent2 hover:text-accent2 transition-all text-center">
               See How It Works ↓
-            </button>
+            </a>
           </div>
 
           {/* Stats */}
