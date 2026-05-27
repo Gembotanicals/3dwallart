@@ -335,6 +335,12 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         </div>
 
         <div className="flex-1" />
+        <button
+          onClick={() => setShareModalOpen(true)}
+          className="font-mono text-[11px] text-dim hover:text-accent border border-line hover:border-accent px-3 py-1.5 rounded transition-colors"
+        >
+          ⤴ Share
+        </button>
         <Link
           href="/dashboard"
           className="font-mono text-[11px] text-dim hover:text-ink transition-colors"
@@ -360,6 +366,14 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           <ExportPanel projectId={params.id} />
         </div>
       </div>
+
+      {/* Share Modal */}
+      {shareModalOpen && (
+        <ShareModal
+          projectId={params.id}
+          onClose={() => setShareModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
