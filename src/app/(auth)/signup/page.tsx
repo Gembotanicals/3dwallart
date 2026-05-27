@@ -77,7 +77,7 @@ export default function SignupPage() {
         setError("Account created but sign in failed. Please try logging in.");
         router.push("/login");
       } else {
-        router.push("/dashboard");
+        router.push("/welcome");
         router.refresh();
       }
     } catch {
@@ -169,7 +169,7 @@ export default function SignupPage() {
         {/* OAuth Buttons */}
         <div className="space-y-3">
           <button
-            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+            onClick={() => signIn("google", { callbackUrl: "/welcome" })}
             className="flex w-full items-center justify-center gap-3 rounded border border-line bg-panel2 px-4 py-2.5 text-sm text-ink transition-colors hover:bg-line"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -194,7 +194,7 @@ export default function SignupPage() {
           </button>
 
           <button
-            onClick={() => signIn("github", { callbackUrl: "/dashboard" })}
+            onClick={() => signIn("github", { callbackUrl: "/welcome" })}
             className="flex w-full items-center justify-center gap-3 rounded border border-line bg-panel2 px-4 py-2.5 text-sm text-ink transition-colors hover:bg-line"
           >
             <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">

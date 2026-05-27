@@ -1,0 +1,136 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/db";
+import bcrypt from "bcrypt";
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { token: string } }
+) {
+  try {
+    const { token } = params;
+
+    const shareLink = await prisma.shareLink.findUnique({
+      where: { token },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            settings: true,
+            thumbnailUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!shareLink) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // Check expiration
+    if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
+      return NextResponse.json({ error: "Link expired" }, { status: 410 });
+    }
+
+    // Check password protection
+    if (shareLink.password) {
+      const { searchParams } = new URL(request.url);
+      const providedPassword =
+        searchParams.get("password") ||
+        request.headers.get("x-share-password");
+
+      if (!providedPassword) {
+        return NextResponse.json(
+          {
+            error: "Password required",
+            passwordRequired: true,
+            projectName: shareLink.project.name,
+          },
+          { status: 401 }
+        );
+      }
+
+      const validPassword = await bcrypt.compare(
+        providedPassword,
+        shareLink.password
+      );
+      if (!validPassword) {
+        return NextResponse.json(
+          {
+            error: "Invalid password",
+            passwordRequired: true,
+            invalidPassword: true,
+            projectName: shareLink.project.name,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Increment views
+    await prisma.shareLink.update({
+      where: { token },
+      data: { views: { increment: 1 } },
+    });
+
+    // Return project settings (not the full project)
+    return NextResponse.json({
+      projectName: shareLink.project.name,
+      settings: shareLink.project.settings,
+      thumbnailUrl: shareLink.project.thumbnailUrl,
+      views: shareLink.views + 1,
+      passwordProtected: !!shareLink.password,
+      expiresAt: shareLink.expiresAt,
+    });
+  } catch (error) {
+    console.error("GET /api/share/[token] error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { token: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { token } = params;
+
+    // Find the share link and verify ownership
+    const shareLink = await prisma.shareLink.findUnique({
+      where: { token },
+      include: {
+        project: { select: { userId: true } },
+      },
+    });
+
+    if (!shareLink) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (shareLink.project.userId !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    await prisma.shareLink.delete({
+      where: { token },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /api/share/[token] error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

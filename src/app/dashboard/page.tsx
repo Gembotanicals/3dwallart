@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { useSession } from 'next-auth/react';
+import AppHeader from '@/components/layout/AppHeader';
+import { DashboardEmpty } from '@/components/onboarding/EmptyStates';
+import { SkeletonGrid } from '@/components/ui/Skeleton';
 import ProjectGrid from '@/components/dashboard/ProjectGrid';
 import CreateProjectModal from '@/components/dashboard/CreateProjectModal';
 import UpgradePrompt from '@/components/dashboard/UpgradePrompt';
+import { ToastContainer } from '@/components/ui/Toast';
 
 interface Project {
   id: string;
@@ -56,6 +59,13 @@ export default function DashboardPage() {
     fetchProjects();
   }, [fetchProjects]);
 
+  // Listen for open-create-modal events from EmptyState
+  useEffect(() => {
+    const handler = () => setShowCreateModal(true);
+    window.addEventListener('open-create-modal', handler);
+    return () => window.removeEventListener('open-create-modal', handler);
+  }, []);
+
   // Debounced search
   const [searchInput, setSearchInput] = useState('');
   useEffect(() => {
@@ -89,29 +99,13 @@ export default function DashboardPage() {
     }
   };
 
+  const isEmpty = !loading && projects.length === 0 && !search;
+
   return (
     <main className="min-h-screen">
-      {/* Header */}
-      <div className="border-b border-line px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="font-heading text-xl tracking-[-0.5px] uppercase text-ink hover:text-accent transition-colors">
-            RELIEF<span className="text-accent">·</span>FORGE
-          </Link>
-          <span className="font-mono text-[11px] text-dim border border-line py-[3px] px-2 rounded-sm hidden sm:inline">
-            DASHBOARD
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link href="/library" className="font-mono text-xs text-dim hover:text-ink transition-colors">
-            Library
-          </Link>
-          <Link href="/settings" className="font-mono text-xs text-dim hover:text-ink transition-colors">
-            Settings
-          </Link>
-        </div>
-      </div>
+      <AppHeader />
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {/* Title + Create button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
@@ -129,65 +123,75 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Search + Sort controls */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              placeholder="Search projects..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full rounded border border-line bg-panel px-3 py-2 text-sm text-ink placeholder-dim focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 font-mono"
-            />
-            {searchInput && (
-              <button
-                onClick={() => { setSearchInput(''); setSearch(''); setPage(1); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-ink text-sm"
+        {isEmpty ? (
+          <DashboardEmpty />
+        ) : (
+          <>
+            {/* Search + Sort controls */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  placeholder="Search projects..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="w-full rounded border border-line bg-panel px-3 py-2 text-sm text-ink placeholder-dim focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 font-mono"
+                />
+                {searchInput && (
+                  <button
+                    onClick={() => { setSearchInput(''); setSearch(''); setPage(1); }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-ink text-sm"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <select
+                value={sort}
+                onChange={(e) => { setSort(e.target.value); setPage(1); }}
+                className="rounded border border-line bg-panel px-3 py-2 text-sm text-ink font-mono focus:border-accent focus:outline-none"
               >
-                ✕
-              </button>
+                <option value="updatedAt">Recently Modified</option>
+                <option value="createdAt">Newest First</option>
+                <option value="name">Name A–Z</option>
+              </select>
+            </div>
+
+            {/* Project Grid */}
+            {loading ? (
+              <SkeletonGrid count={6} />
+            ) : (
+              <ProjectGrid
+                projects={projects}
+                loading={false}
+                onDelete={handleDelete}
+                onDuplicate={handleDuplicate}
+              />
             )}
-          </div>
-          <select
-            value={sort}
-            onChange={(e) => { setSort(e.target.value); setPage(1); }}
-            className="rounded border border-line bg-panel px-3 py-2 text-sm text-ink font-mono focus:border-accent focus:outline-none"
-          >
-            <option value="updatedAt">Recently Modified</option>
-            <option value="createdAt">Newest First</option>
-            <option value="name">Name A–Z</option>
-          </select>
-        </div>
 
-        {/* Project Grid */}
-        <ProjectGrid
-          projects={projects}
-          loading={loading}
-          onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
-        />
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-4 mt-8">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="font-mono text-xs px-3 py-1.5 rounded border border-line text-dim hover:text-ink hover:border-accent/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              ← Previous
-            </button>
-            <span className="font-mono text-xs text-dim">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="font-mono text-xs px-3 py-1.5 rounded border border-line text-dim hover:text-ink hover:border-accent/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              Next →
-            </button>
-          </div>
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-4 mt-8">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="font-mono text-xs px-3 py-1.5 rounded border border-line text-dim hover:text-ink hover:border-accent/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ← Previous
+                </button>
+                <span className="font-mono text-xs text-dim">
+                  Page {page} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="font-mono text-xs px-3 py-1.5 rounded border border-line text-dim hover:text-ink hover:border-accent/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -201,6 +205,7 @@ export default function DashboardPage() {
         open={showUpgrade}
         onClose={() => setShowUpgrade(false)}
       />
+      <ToastContainer />
     </main>
   );
 }

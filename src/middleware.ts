@@ -12,5 +12,6 @@ export const config = {
     "/editor/:path*",
     "/library/:path*",
     "/settings/:path*",
+    "/welcome/:path*",
   ],
 };

@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import ControlPanel from '@/components/3d/ControlPanel';
 import ExportBar from '@/components/3d/ExportBar';
+import ExportPanel from '@/components/export/ExportPanel';
+import ShareModal from '@/components/share/ShareModal';
 import { useEditorStore } from '@/lib/store';
 
 // Dynamic import for the 3D viewer (SSR-incompatible)
@@ -150,6 +152,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [editingName, setEditingName] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [loadError, setLoadError] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const thumbnailTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSettingsRef = useRef<string>('');
@@ -354,6 +357,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
             <Toast />
           </div>
           <ExportBar />
+          <ExportPanel projectId={params.id} />
         </div>
       </div>
     </div>
