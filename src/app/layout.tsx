@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Archivo, Space_Mono } from "next/font/google";
 import "./globals.css";
+import SessionProvider from "@/components/providers/SessionProvider";
 
 const archivo = Archivo({
   subsets: ["latin"],
@@ -34,7 +35,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-bg text-ink font-sans grid-bg antialiased">
-        {children}
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );

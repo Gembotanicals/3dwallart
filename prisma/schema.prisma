@@ -44,6 +44,7 @@ model User {
   emailVerified        DateTime?
   name                 String?
   avatar               String?
+  password             String?
   plan                 Plan     @default(FREE)
   storageUsed          Int      @default(0) // bytes
   stripeCustomerId     String?  @unique
