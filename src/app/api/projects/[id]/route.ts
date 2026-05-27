@@ -1,0 +1,120 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/db";
+import { deleteFile, extractKeyFromUrl } from "@/lib/r2";
+
+async function getProjectWithAuth(id: string, userId: string) {
+  const project = await prisma.project.findFirst({
+    where: { id, userId },
+  });
+  return project;
+}
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const project = await prisma.project.findFirst({
+      where: { id: params.id, userId: session.user.id },
+      include: {
+        exports: { orderBy: { createdAt: "desc" } },
+        shareLinks: { orderBy: { createdAt: "desc" } },
+      },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(project);
+  } catch (error) {
+    console.error("GET /api/projects/[id] error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const existing = await getProjectWithAuth(params.id, session.user.id);
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const updateData: any = {};
+
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.thumbnailUrl !== undefined) updateData.thumbnailUrl = body.thumbnailUrl;
+    if (body.stlUrl !== undefined) updateData.stlUrl = body.stlUrl;
+
+    // Auto-increment version on settings change
+    if (body.settings !== undefined) {
+      updateData.settings = body.settings;
+      updateData.version = existing.version + 1;
+    }
+
+    const project = await prisma.project.update({
+      where: { id: params.id },
+      data: updateData,
+    });
+
+    return NextResponse.json(project);
+  } catch (error) {
+    console.error("PUT /api/projects/[id] error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const project = await getProjectWithAuth(params.id, session.user.id);
+    if (!project) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // Delete associated R2 files
+    const filesToDelete: string[] = [];
+    if (project.thumbnailUrl) {
+      const key = extractKeyFromUrl(project.thumbnailUrl);
+      if (key) filesToDelete.push(key);
+    }
+    if (project.stlUrl) {
+      const key = extractKeyFromUrl(project.stlUrl);
+      if (key) filesToDelete.push(key);
+    }
+
+    // Best-effort delete from R2
+    await Promise.allSettled(filesToDelete.map((key) => deleteFile(key)));
+
+    // Cascade deletes handled by Prisma (onDelete: Cascade on exports and shareLinks)
+    await prisma.project.delete({ where: { id: params.id } });
+
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    console.error("DELETE /api/projects/[id] error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
