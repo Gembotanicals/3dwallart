@@ -8,11 +8,17 @@ const isProtectedRoute = createRouteMatcher([
   "/welcome/:path*",
 ]);
 
-export default clerkMiddleware((auth, request) => {
-  if (isProtectedRoute(request)) {
-    auth().protect();
+export default clerkMiddleware(
+  (auth, request) => {
+    if (isProtectedRoute(request)) {
+      auth().protect();
+    }
+  },
+  {
+    signInUrl: "/login",
+    signUpUrl: "/signup",
   }
-});
+);
 
 export const config = {
   matcher: [
