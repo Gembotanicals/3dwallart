@@ -1,0 +1,170 @@
+// ReliefForge SaaS - Prisma Schema
+// PostgreSQL database for relief generation platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────
+// Enums
+// ──────────────────────────────────────────────
+
+enum Plan {
+  FREE
+  PRO
+  TEAM
+  ENTERPRISE
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ExportFormat {
+  STL
+  OBJ
+  THREE_MF
+}
+
+// ──────────────────────────────────────────────
+// User & Auth Models
+// ──────────────────────────────────────────────
+
+model User {
+  id                   String   @id @default(cuid())
+  email                String   @unique
+  emailVerified        DateTime?
+  name                 String?
+  avatar               String?
+  plan                 Plan     @default(FREE)
+  storageUsed          Int      @default(0) // bytes
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  projects Project[]
+  images   Image[]
+  accounts Account[]
+  sessions Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionToken String   @unique
+  expires      DateTime
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ──────────────────────────────────────────────
+// Application Models
+// ──────────────────────────────────────────────
+
+model Project {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String   @default("Untitled Project")
+  settings     Json     @default("{}") // All relief/panel/grid/joining/color settings as JSON
+  thumbnailUrl String?
+  stlUrl       String?
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  exports    Export[]
+  shareLinks ShareLink[]
+
+  @@index([userId])
+  @@map("projects")
+}
+
+model Image {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  filename     String
+  originalName String
+  url          String
+  thumbnailUrl String?
+  width        Int
+  height       Int
+  sizeBytes    Int
+  mimeType     String
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@map("images")
+}
+
+model Export {
+  id          String       @id @default(cuid())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  format      ExportFormat @default(STL)
+  resolution  Int          @default(220)
+  url         String?
+  status      ExportStatus @default(PENDING)
+  fileSize    Int?
+  errorMsg    String?
+  createdAt   DateTime     @default(now())
+  completedAt DateTime?
+
+  @@index([projectId])
+  @@map("exports")
+}
+
+model ShareLink {
+  id        String    @id @default(cuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  token     String    @unique @default(cuid())
+  password  String?
+  expiresAt DateTime?
+  views     Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@map("share_links")
+}
