@@ -15,7 +15,7 @@ async function upgrade() {
     // Upgrade user to PRO plan
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { plan: "PRO" },
+      data: { plan: "TEAM" },
       select: { id: true, email: true, plan: true },
     });
 
