@@ -300,8 +300,8 @@ export function buildGeometryServer(
   const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) =>
     pushQuad(V, a, b, c, d);
   const Z = (x: number, y: number) => base + data[y * nx + x] * relief;
-  const dx = W / (nx - 1);
-  const dy = H / (ny - 1);
+  const dx = nx > 1 ? W / (nx - 1) : W;
+  const dy = ny > 1 ? H / (ny - 1) : H;
   const hasR = s.tcol < s.gc;
   const hasU = s.trow < s.gr;
   const hasL = s.tcol > 1;
@@ -589,4 +589,54 @@ export function toSTLBuffer(geo: ServerGeometryResult): Buffer {
     o += 2;
   }
   return buf;
+}
+
+export function toOBJBuffer(geo: ServerGeometryResult): Buffer {
+  const t = geo.tris;
+  const a = geo.array;
+  
+  // Collect unique vertices
+  const vertexMap = new Map<string, number>();
+  const vertices: number[][] = [];
+  const faces: number[][] = [];
+  
+  for (let i = 0; i < t; i++) {
+    const b = i * 9;
+    const face: number[] = [];
+    
+    for (let v = 0; v < 3; v++) {
+      const x = a[b + v * 3];
+      const y = a[b + v * 3 + 1];
+      const z = a[b + v * 3 + 2];
+      const key = `${x},${y},${z}`;
+      
+      let idx = vertexMap.get(key);
+      if (idx === undefined) {
+        idx = vertices.length;
+        vertexMap.set(key, idx);
+        vertices.push([x, y, z]);
+      }
+      face.push(idx);
+    }
+    
+    faces.push(face);
+  }
+  
+  // Build OBJ string
+  let obj = '# ReliefForge OBJ Export\n';
+  obj += `# Vertices: ${vertices.length}\n`;
+  obj += `# Faces: ${faces.length}\n\n`;
+  
+  for (const [x, y, z] of vertices) {
+    obj += `v ${x.toFixed(6)} ${y.toFixed(6)} ${z.toFixed(6)}\n`;
+  }
+  
+  obj += '\n';
+  
+  for (const face of faces) {
+    // OBJ uses 1-based indexing
+    obj += `f ${face[0] + 1} ${face[1] + 1} ${face[2] + 1}\n`;
+  }
+  
+  return Buffer.from(obj, 'utf-8');
 }

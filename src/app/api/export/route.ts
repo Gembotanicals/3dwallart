@@ -36,6 +36,14 @@ export async function POST(req: NextRequest) {
     const limits = PLAN_LIMITS[user.plan] || PLAN_LIMITS.FREE;
     const requestedRes = resolution || 220;
 
+    // Validate resolution bounds
+    if (requestedRes < 50) {
+      return NextResponse.json(
+        { error: "Resolution must be at least 50" },
+        { status: 400 }
+      );
+    }
+
     if (requestedRes > limits.maxResolution) {
       return NextResponse.json(
         {

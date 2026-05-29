@@ -94,18 +94,26 @@ export async function DELETE(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Delete associated R2 files
+    // Collect all R2 keys to delete
     const filesToDelete: string[] = [];
-    if (project.thumbnailUrl) {
-      const key = extractKeyFromUrl(project.thumbnailUrl);
-      if (key) filesToDelete.push(key);
-    }
-    if (project.stlUrl) {
-      const key = extractKeyFromUrl(project.stlUrl);
-      if (key) filesToDelete.push(key);
+    
+    // thumbnailUrl and stlUrl store R2 keys directly (returned by uploadFile)
+    if (project.thumbnailUrl) filesToDelete.push(project.thumbnailUrl);
+    if (project.stlUrl) filesToDelete.push(project.stlUrl);
+
+    // Get export records and collect their R2 keys before cascade delete
+    const exports = await prisma.export.findMany({
+      where: { projectId: params.id },
+      select: { url: true, status: true },
+    });
+    
+    for (const exp of exports) {
+      if (exp.status === "COMPLETED" && exp.url) {
+        filesToDelete.push(exp.url);
+      }
     }
 
-    // Best-effort delete from R2
+    // Best-effort delete all files from R2
     await Promise.allSettled(filesToDelete.map((key) => deleteFile(key)));
 
     // Cascade deletes handled by Prisma (onDelete: Cascade on exports and shareLinks)

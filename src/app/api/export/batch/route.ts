@@ -42,6 +42,14 @@ export async function POST(req: NextRequest) {
     const limits = PLAN_LIMITS[user.plan] || PLAN_LIMITS.FREE;
     const requestedRes = resolution || 220;
 
+    // Validate resolution bounds
+    if (requestedRes < 50) {
+      return NextResponse.json(
+        { error: "Resolution must be at least 50" },
+        { status: 400 }
+      );
+    }
+
     if (requestedRes > limits.maxResolution) {
       return NextResponse.json(
         {
@@ -63,6 +71,14 @@ export async function POST(req: NextRequest) {
     const settings = project.settings as unknown as ServerReliefSettings;
     const cols = gridCols || settings.gc || 1;
     const rows = gridRows || settings.gr || 1;
+
+    // Validate grid size to prevent DoS (max 8x8 = 64 tiles)
+    if (cols < 1 || cols > 8 || rows < 1 || rows > 8) {
+      return NextResponse.json(
+        { error: "Grid size must be between 1×1 and 8×8" },
+        { status: 400 }
+      );
+    }
 
     // Create export records for each tile
     const exportIds: string[] = [];

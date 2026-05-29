@@ -243,8 +243,8 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
   const V: number[] = [];
   const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => pushQuad(V, a, b, c, d);
   const Z = (x: number, y: number) => base + data[y * nx + x] * relief;
-  const dx = W / (nx - 1);
-  const dy = H / (ny - 1);
+  const dx = nx > 1 ? W / (nx - 1) : W;
+  const dy = ny > 1 ? H / (ny - 1) : H;
   const hasR = s.tcol < s.gc;
   const hasU = s.trow < s.gr;
   const hasL = s.tcol > 1;
@@ -342,8 +342,8 @@ export function buildMoldGeometry(hg: HeightGrid, s: ReliefSettings): GeometryRe
   q([ix1, iy0, total], [ix1, iy0, floor], [ix1, iy1, floor], [ix1, iy1, total]);
 
   // cavity floor (inverted relief)
-  const ddx = W / (nx - 1);
-  const ddy = H / (ny - 1);
+  const ddx = nx > 1 ? W / (nx - 1) : W;
+  const ddy = ny > 1 ? H / (ny - 1) : H;
   const ZZ = (x: number, y: number) => floor + (1 - data[y * nx + x]) * cav;
   for (let y = 0; y < ny - 1; y++) {
     for (let x = 0; x < nx - 1; x++) {

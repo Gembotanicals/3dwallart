@@ -40,10 +40,8 @@ export async function POST(
 
     // Delete old thumbnail from R2 if exists
     if (project.thumbnailUrl) {
-      const oldKey = extractKeyFromUrl(project.thumbnailUrl);
-      if (oldKey) {
-        await deleteFile(oldKey).catch(() => {}); // best-effort
-      }
+      // thumbnailUrl stores the R2 key directly (returned by uploadFile)
+      await deleteFile(project.thumbnailUrl).catch(() => {}); // best-effort
     }
 
     // Upload to R2

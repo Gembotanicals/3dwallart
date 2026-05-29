@@ -82,9 +82,19 @@ export async function getSignedUrl(
  * Extract the key from a full R2 URL
  */
 export function extractKeyFromUrl(url: string): string | null {
-  const prefix = `https://${R2_BUCKET}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/`;
-  if (url.startsWith(prefix)) {
-    return url.slice(prefix.length);
+  // Handle path-style URLs (forcePathStyle: true)
+  // Format: https://{accountId}.r2.cloudflarestorage.com/{bucket}/{key}
+  const pathStylePrefix = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}/`;
+  if (url.startsWith(pathStylePrefix)) {
+    return url.slice(pathStylePrefix.length);
   }
+  
+  // Handle virtual-hosted style URLs (forcePathStyle: false)
+  // Format: https://{bucket}.{accountId}.r2.cloudflarestorage.com/{key}
+  const virtualHostedPrefix = `https://${R2_BUCKET}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/`;
+  if (url.startsWith(virtualHostedPrefix)) {
+    return url.slice(virtualHostedPrefix.length);
+  }
+  
   return null;
 }

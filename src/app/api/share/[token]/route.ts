@@ -35,10 +35,8 @@ export async function GET(
 
     // Check password protection
     if (shareLink.password) {
-      const { searchParams } = new URL(request.url);
-      const providedPassword =
-        searchParams.get("password") ||
-        request.headers.get("x-share-password");
+      // Only accept password via header (never query params — they get logged)
+      const providedPassword = request.headers.get("x-share-password");
 
       if (!providedPassword) {
         return NextResponse.json(

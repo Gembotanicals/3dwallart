@@ -6,6 +6,7 @@ import {
   buildGeometryServer,
   buildMoldGeometryServer,
   toSTLBuffer,
+  toOBJBuffer,
   ServerReliefSettings,
 } from "@/lib/relief-engine-server";
 import sharp from "sharp";
@@ -98,8 +99,26 @@ export async function processInline(data: ExportJobData): Promise<void> {
       throw new Error("Failed to build geometry");
     }
 
-    // Generate STL buffer
-    const stlBuffer = toSTLBuffer(geo);
+    // Generate output based on format
+    let outputBuffer: Buffer;
+    let extension: string;
+    
+    switch (data.format) {
+      case "OBJ":
+        outputBuffer = toOBJBuffer(geo);
+        extension = "obj";
+        break;
+      case "THREE_MF":
+        // 3MF not yet implemented, fall back to STL
+        outputBuffer = toSTLBuffer(geo);
+        extension = "3mf";
+        break;
+      case "STL":
+      default:
+        outputBuffer = toSTLBuffer(geo);
+        extension = "stl";
+        break;
+    }
 
     // Upload to R2
     const { uploadFile, generateKey } = await import("@/lib/r2");
@@ -110,9 +129,9 @@ export async function processInline(data: ExportJobData): Promise<void> {
     const userId = project?.userId || "unknown";
     const r2Key = generateKey(
       userId,
-      `export-${exportId}-${data.format.toLowerCase()}.stl`
+      `export-${exportId}-${data.format.toLowerCase()}.${extension}`
     );
-    const r2Url = await uploadFile(r2Key, stlBuffer, "application/octet-stream");
+    const r2Url = await uploadFile(r2Key, outputBuffer, "application/octet-stream");
 
     // Update export record
     await prisma.export.update({
@@ -120,7 +139,7 @@ export async function processInline(data: ExportJobData): Promise<void> {
       data: {
         status: "COMPLETED",
         url: r2Url,
-        fileSize: stlBuffer.length,
+        fileSize: outputBuffer.length,
         completedAt: new Date(),
       },
     });
