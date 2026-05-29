@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { deleteFile, extractKeyFromUrl } from "@/lib/r2";
+import { deleteFile } from "@/lib/r2";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export const dynamic = "force-dynamic";
@@ -57,21 +57,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Image not found" }, { status: 404 });
     }
 
-    // Delete from R2
-    const originalKey = extractKeyFromUrl(image.url);
-    if (originalKey) {
-      await deleteFile(originalKey).catch((err) =>
+    // Delete from R2 (url and thumbnailUrl store keys directly)
+    if (image.url) {
+      await deleteFile(image.url).catch((err) =>
         console.error("Failed to delete original from R2:", err)
       );
     }
 
     if (image.thumbnailUrl) {
-      const thumbKey = extractKeyFromUrl(image.thumbnailUrl);
-      if (thumbKey) {
-        await deleteFile(thumbKey).catch((err) =>
-          console.error("Failed to delete thumbnail from R2:", err)
-        );
-      }
+      await deleteFile(image.thumbnailUrl).catch((err) =>
+        console.error("Failed to delete thumbnail from R2:", err)
+      );
     }
 
     // Delete from database

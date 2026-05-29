@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import prisma from "@/lib/db";
+import { getSignedUrl } from "@/lib/r2";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export const dynamic = "force-dynamic";
@@ -39,8 +40,23 @@ export async function GET(request: NextRequest) {
       prisma.image.count({ where }),
     ]);
 
+    // Sign URLs for all images
+    const signedImages = await Promise.all(
+      images.map(async (img) => {
+        let url = img.url;
+        let thumbnailUrl = img.thumbnailUrl;
+        try {
+          if (url) url = await getSignedUrl(url, 3600);
+          if (thumbnailUrl) thumbnailUrl = await getSignedUrl(thumbnailUrl, 3600);
+        } catch {
+          // If signing fails, return the key as-is
+        }
+        return { ...img, url, thumbnailUrl };
+      })
+    );
+
     return NextResponse.json({
-      images,
+      images: signedImages,
       total,
       page,
       totalPages: Math.ceil(total / PAGE_SIZE),

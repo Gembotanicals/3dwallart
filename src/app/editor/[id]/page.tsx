@@ -356,7 +356,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
       <div className="flex flex-1 min-h-0">
         <ControlPanel />
         <div className="flex-1 flex flex-col min-w-0 relative">
-          <div className="flex-1 min-h-0 relative">
+          <div className="flex-1 min-h-0 relative flex flex-col">
             <ReliefViewer />
             <HUD />
             <SourcePreview />

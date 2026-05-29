@@ -43,21 +43,11 @@ export interface ExportJobData {
 }
 
 /**
- * Add an export job to the BullMQ queue.
- * Falls back to inline processing if Redis is not available.
+ * Process an export job inline (synchronously in the API route).
+ * No separate worker process needed — keeps deployment simple.
  */
 export async function addExportJob(data: ExportJobData): Promise<void> {
-  if (stlQueue) {
-    await stlQueue.add("generate", data, {
-      attempts: 2,
-      backoff: { type: "exponential", delay: 2000 },
-      removeOnComplete: 100,
-      removeOnFail: 50,
-    });
-  } else {
-    // No Redis available — process inline
-    await processInline(data);
-  }
+  await processInline(data);
 }
 
 /**

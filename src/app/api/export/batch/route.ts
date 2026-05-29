@@ -4,6 +4,7 @@ import { addExportJob } from "@/lib/queue";
 import { PLAN_LIMITS } from "@/types";
 import type { ServerReliefSettings } from "@/lib/relief-engine-server";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
+import { getSignedUrl } from "@/lib/r2";
 
 export async function POST(req: NextRequest) {
   try {
@@ -144,16 +145,31 @@ export async function GET(req: NextRequest) {
     const processing = exports.filter((e: { status: string }) => e.status === "PROCESSING").length;
     const pending = exports.filter((e: { status: string }) => e.status === "PENDING").length;
 
+    // Generate signed URLs for completed exports
+    const exportsWithUrls = await Promise.all(
+      exports.map(async (e: any) => {
+        let url = e.url;
+        if (e.status === "COMPLETED" && e.url) {
+          try {
+            url = await getSignedUrl(e.url, 3600);
+          } catch {
+            url = undefined;
+          }
+        }
+        return {
+          id: e.id,
+          status: e.status,
+          url,
+          errorMsg: e.errorMsg,
+          fileSize: e.fileSize,
+          format: e.format,
+          resolution: e.resolution,
+        };
+      })
+    );
+
     return NextResponse.json({
-      exports: exports.map((e: any) => ({
-        id: e.id,
-        status: e.status,
-        url: e.url,
-        errorMsg: e.errorMsg,
-        fileSize: e.fileSize,
-        format: e.format,
-        resolution: e.resolution,
-      })),
+      exports: exportsWithUrls,
       summary: {
         total,
         completed,

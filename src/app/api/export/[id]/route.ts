@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { deleteFile, extractKeyFromUrl } from "@/lib/r2";
+import { deleteFile, getSignedUrl } from "@/lib/r2";
 import { stlQueue } from "@/lib/queue";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
 
@@ -43,10 +43,21 @@ export async function GET(
       }
     }
 
+    // Generate a pre-signed download URL for completed exports
+    let downloadUrl: string | undefined;
+    if (exportRecord.status === "COMPLETED" && exportRecord.url) {
+      try {
+        downloadUrl = await getSignedUrl(exportRecord.url, 3600); // 1 hour expiry
+      } catch {
+        // If signing fails, return the raw key as fallback
+        downloadUrl = undefined;
+      }
+    }
+
     return NextResponse.json({
       id: exportRecord.id,
       status: exportRecord.status,
-      url: exportRecord.url,
+      url: downloadUrl,
       errorMsg: exportRecord.errorMsg,
       progress: progress ?? undefined,
       format: exportRecord.format,
@@ -102,13 +113,10 @@ export async function DELETE(
       }
     }
 
-    // If COMPLETED, delete the R2 file
+    // If COMPLETED, delete the R2 file (url field stores the key directly)
     if (exportRecord.status === "COMPLETED" && exportRecord.url) {
       try {
-        const key = extractKeyFromUrl(exportRecord.url);
-        if (key) {
-          await deleteFile(key);
-        }
+        await deleteFile(exportRecord.url);
       } catch (err) {
         console.warn("[api/export/[id]] Failed to delete R2 file:", err);
       }

@@ -13,6 +13,7 @@ export const r2 = new S3Client({
     accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
   },
+  forcePathStyle: true,
 });
 
 export const R2_BUCKET = process.env.R2_BUCKET_NAME || "reliefforge";
@@ -28,7 +29,7 @@ export function generateKey(userId: string, filename: string): string {
 }
 
 /**
- * Upload a file to R2 and return the public URL
+ * Upload a file to R2 and return the storage key
  */
 export async function uploadFile(
   key: string,
@@ -44,8 +45,8 @@ export async function uploadFile(
     })
   );
 
-  // Construct public URL
-  return `https://${R2_BUCKET}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`;
+  // Return the key — callers should use getSignedUrl() for downloads
+  return key;
 }
 
 /**
