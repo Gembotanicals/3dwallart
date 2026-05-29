@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
 
-export async function POST() {
+export async function POST() { return upgrade(); }
+export async function GET() { return upgrade(); }
+
+async function upgrade() {
   try {
     const userId = await getCurrentUserId();
     if (!userId) {
