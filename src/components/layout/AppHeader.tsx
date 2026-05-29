@@ -120,7 +120,7 @@ export default function AppHeader() {
                   <div className="border-t border-line my-1" />
 
                   <button
-                    onClick={() => { signOut(); window.location.href = '/login'; }}
+                    onClick={async () => { await signOut(); window.location.href = '/'; }}
                     className="flex items-center gap-2 px-4 py-2 text-sm text-dim hover:text-red-400 hover:bg-panel2 w-full transition-colors"
                   >
                     Sign out
