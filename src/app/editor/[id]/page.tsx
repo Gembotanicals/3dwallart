@@ -154,7 +154,6 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [loadError, setLoadError] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const thumbnailTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSettingsRef = useRef<string>('');
   const nameInputRef = useRef<HTMLInputElement>(null);
   const isLoadingRef = useRef(true);
@@ -295,32 +294,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     }
   };
 
-  // Capture thumbnail every 30 seconds
-  useEffect(() => {
-    thumbnailTimerRef.current = setInterval(async () => {
-      try {
-        // Find the Three.js canvas (inside the relief viewport, not the minimap)
-        const viewport = document.getElementById('relief-viewport');
-        const canvas = viewport?.querySelector('canvas') as HTMLCanvasElement | null;
-        if (!canvas) return;
-
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-        if (!dataUrl || dataUrl === 'data:,') return;
-
-        await fetch(`/api/projects/${params.id}/thumbnail`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageData: dataUrl }),
-        });
-      } catch (e) {
-        // silent fail for thumbnail save
-      }
-    }, 30000);
-
-    return () => {
-      if (thumbnailTimerRef.current) clearInterval(thumbnailTimerRef.current);
-    };
-  }, [params.id]);
+  // Thumbnail capture moved to export — no more 30-second timer
 
   if (loadError) {
     return (
@@ -400,7 +374,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
             <SourcePreview />
             <Toast />
           </div>
-          <ExportBar />
+          <ExportBar projectId={params.id} />
           <ExportPanel projectId={params.id} />
         </div>
       </div>

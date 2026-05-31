@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '@/lib/store';
+import { captureThumbnail } from '@/lib/thumbnail';
 import ExportHistory from './ExportHistory';
 
 const FORMATS = ['STL', 'OBJ', '3MF'] as const;
@@ -110,6 +111,7 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
           pollTimersRef.current.push(timer);
         } else if (data.status === 'COMPLETED') {
           showToast('Export complete!');
+          captureThumbnail(projectId);
         } else if (data.status === 'FAILED') {
           showToast('Export failed');
         }
