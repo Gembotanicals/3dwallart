@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { uploadFile, generateKey, deleteFile, extractKeyFromUrl } from "@/lib/r2";
+import { uploadFile, deleteFile } from "@/lib/r2";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export async function POST(
@@ -44,9 +44,10 @@ export async function POST(
       await deleteFile(project.thumbnailUrl).catch(() => {}); // best-effort
     }
 
-    // Upload to R2
+    // Upload to R2 with a fixed key (no timestamp prefix) so each project
+    // has exactly one thumbnail that gets overwritten on each save.
     const ext = contentType.includes("png") ? "png" : "jpg";
-    const key = generateKey(userId, `thumbnails/${params.id}.${ext}`);
+    const key = `uploads/${userId}/thumbnail-${params.id}.${ext}`;
     const url = await uploadFile(key, buffer, contentType);
 
     // Update project

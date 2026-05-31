@@ -62,17 +62,26 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
     };
   }, []);
 
-  // Get image data URL from the source canvas
+  // Get image data URL from the source canvas, capped at 2048px on the longest side
+  // to avoid oversized JSON payloads that exceed server body limits.
   const getImageDataUrl = useCallback((): string | null => {
     if (!img || !srcCanvas) return null;
     try {
+      const MAX_DIM = 2048;
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (w > MAX_DIM || h > MAX_DIM) {
+        const scale = MAX_DIM / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = img.naturalWidth;
-      tempCanvas.height = img.naturalHeight;
+      tempCanvas.width = w;
+      tempCanvas.height = h;
       const ctx = tempCanvas.getContext('2d');
       if (!ctx) return null;
-      ctx.drawImage(img, 0, 0);
-      return tempCanvas.toDataURL('image/png');
+      ctx.drawImage(img, 0, 0, w, h);
+      return tempCanvas.toDataURL('image/jpeg', 0.92);
     } catch {
       return null;
     }
@@ -267,6 +276,11 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="border-t border-line bg-panel px-4 py-3 space-y-3">
+      {/* Section label */}
+      <div className="font-mono text-[10px] text-dim uppercase tracking-wider">
+        High-Res Server Export
+      </div>
+
       {/* Format & Resolution selectors */}
       <div className="flex items-center gap-4 flex-wrap">
         {/* Format segmented buttons */}

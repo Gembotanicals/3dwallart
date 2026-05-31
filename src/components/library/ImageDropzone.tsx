@@ -11,18 +11,19 @@ interface ImageDropzoneProps {
 export function ImageDropzone({ onUploadComplete }: ImageDropzoneProps) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
       if (acceptedFiles.length === 0) return;
 
       setUploading(true);
-      setError(null);
+      setErrors([]);
       setProgress(0);
 
       let completed = 0;
       const total = acceptedFiles.length;
+      const uploadErrors: string[] = [];
 
       for (const file of acceptedFiles) {
         const formData = new FormData();
@@ -40,11 +41,15 @@ export function ImageDropzone({ onUploadComplete }: ImageDropzoneProps) {
           }
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : "Upload failed";
-          setError(`${file.name}: ${message}`);
+          uploadErrors.push(`${file.name}: ${message}`);
         }
 
         completed++;
         setProgress(Math.round((completed / total) * 100));
+      }
+
+      if (uploadErrors.length > 0) {
+        setErrors(uploadErrors);
       }
 
       setUploading(false);
@@ -115,8 +120,19 @@ export function ImageDropzone({ onUploadComplete }: ImageDropzoneProps) {
           )}
         </div>
       </div>
-      {error && (
-        <p className="mt-2 text-sm text-warn">{error}</p>
+      {errors.length > 0 && (
+        <div className="mt-2 text-sm text-warn space-y-1">
+          {errors.length === 1 ? (
+            <p>{errors[0]}</p>
+          ) : (
+            <>
+              <p className="font-medium">{errors.length} uploads failed:</p>
+              {errors.map((err, i) => (
+                <p key={i} className="text-xs pl-2">• {err}</p>
+              ))}
+            </>
+          )}
+        </div>
       )}
     </div>
   );

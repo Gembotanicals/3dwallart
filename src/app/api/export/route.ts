@@ -69,6 +69,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate image data before creating record (avoid orphaned PENDING records)
+    const imageDataUrl = body.imageDataUrl || "";
+    if (!imageDataUrl) {
+      return NextResponse.json(
+        { error: "imageDataUrl is required" },
+        { status: 400 }
+      );
+    }
+
     // Verify project ownership
     const project = await prisma.project.findFirst({
       where: { id: projectId, userId: userId },
@@ -78,7 +87,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    // Create export record
+    // Create export record (only after all validation passes)
     const exportRecord = await prisma.export.create({
       data: {
         projectId,
@@ -90,27 +99,6 @@ export async function POST(req: NextRequest) {
 
     // Get project settings (stored as JSON in DB)
     const settings = project.settings as unknown as ServerReliefSettings;
-
-    // For the image data, we need the source image used in this project
-    // The image data URL is typically stored in the project or fetched from the user's library
-    // For now, we'll store a placeholder and the worker will need the actual image
-    // In a real flow, the client sends the current image data along with the request
-    const imageDataUrl = body.imageDataUrl || "";
-
-    if (!imageDataUrl) {
-      // If no image data, mark as failed
-      await prisma.export.update({
-        where: { id: exportRecord.id },
-        data: {
-          status: "FAILED",
-          errorMsg: "No image data provided for export",
-        },
-      });
-      return NextResponse.json(
-        { error: "imageDataUrl is required" },
-        { status: 400 }
-      );
-    }
 
     // Queue the job (or process inline if no Redis)
     await addExportJob({

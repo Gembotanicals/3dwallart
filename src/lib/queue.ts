@@ -109,9 +109,9 @@ export async function processInline(data: ExportJobData): Promise<void> {
         extension = "obj";
         break;
       case "THREE_MF":
-        // 3MF not yet implemented, fall back to STL
-        outputBuffer = toSTLBuffer(geo);
-        extension = "3mf";
+        // 3MF format not yet implemented — return an error instead of
+        // silently producing a mislabeled STL that slicers can't open.
+        throw new Error("3MF export is not yet supported. Please use STL or OBJ.");
         break;
       case "STL":
       default:

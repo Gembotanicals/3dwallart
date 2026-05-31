@@ -19,13 +19,10 @@ export interface GridSettings {
 }
 
 // ─── Relief Settings ────────────────────────────────────────────
-export interface ReliefSettings {
-  intensity: number;   // 0-1, depth multiplier
-  smoothing: number;   // Gaussian blur passes
-  contrast: number;    // Depth contrast multiplier
-  invertDepth: boolean;
-  baseHeight: number;  // Minimum height above zero plane
-}
+// Re-export the canonical ReliefSettings from the engine to avoid type conflicts.
+// The engine's interface is the source of truth (27 fields including pw, ph, gc, gr, etc.)
+import type { ReliefSettings } from '@/lib/relief-engine';
+export type { ReliefSettings };
 
 // ─── Joining Settings ───────────────────────────────────────────
 export type JoiningMethod = "tongue_and_groove" | "dowel" | "flat" | "keyed";

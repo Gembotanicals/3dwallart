@@ -24,6 +24,7 @@ interface ShareData {
   projectName: string;
   settings: Record<string, any>;
   thumbnailUrl: string | null;
+  imageUrl: string | null;
   views: number;
   passwordProtected: boolean;
   expiresAt: string | null;
@@ -222,6 +223,28 @@ function NotFoundView() {
   );
 }
 
+// ─── Procedural Pattern Fallback ────────────────────────────────
+function buildProceduralPattern(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement
+) {
+  const imgData = ctx.createImageData(canvas.width, canvas.height);
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      const nx = x / canvas.width;
+      const ny = y / canvas.height;
+      const v = Math.sin(nx * Math.PI * 3) * Math.cos(ny * Math.PI * 2) * 0.5 + 0.5;
+      const c = Math.floor(v * 255);
+      const idx = (y * canvas.width + x) * 4;
+      imgData.data[idx] = c;
+      imgData.data[idx + 1] = c;
+      imgData.data[idx + 2] = c;
+      imgData.data[idx + 3] = 255;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
 // ─── Main Shared Viewer ──────────────────────────────────────────
 function SharedViewer({ data, token }: { data: ShareData; token: string }) {
   const settings = useMemo<ReliefSettings>(() => {
@@ -245,14 +268,12 @@ function SharedViewer({ data, token }: { data: ShareData; token: string }) {
   const imgRef = useRef<HTMLImageElement | null>(null);
   const srcCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // We don't have the original image in share mode, so we render
-  // based on settings only (geometry from settings without image)
+  // Load the original image if available, otherwise fall back to a procedural pattern
   useEffect(() => {
     if (!srcCanvasRef.current) {
       srcCanvasRef.current = document.createElement('canvas');
     }
 
-    // Generate a placeholder relief from settings
     const canvas = srcCanvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -264,32 +285,35 @@ function SharedViewer({ data, token }: { data: ShareData; token: string }) {
     canvas.width = res * gc;
     canvas.height = res * gr;
 
-    // Create a procedural heightmap pattern for demo
-    const imgData = ctx.createImageData(canvas.width, canvas.height);
-    for (let y = 0; y < canvas.height; y++) {
-      for (let x = 0; x < canvas.width; x++) {
-        const nx = x / canvas.width;
-        const ny = y / canvas.height;
-        const v = Math.sin(nx * Math.PI * 3) * Math.cos(ny * Math.PI * 2) * 0.5 + 0.5;
-        const c = Math.floor(v * 255);
-        const idx = (y * canvas.width + x) * 4;
-        imgData.data[idx] = c;
-        imgData.data[idx + 1] = c;
-        imgData.data[idx + 2] = c;
-        imgData.data[idx + 3] = 255;
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-
-    // Build a temporary image from canvas
-    const img = new Image();
-    img.onload = () => {
+    const buildFromSource = (img: HTMLImageElement) => {
+      // Draw the source image into the canvas at the correct resolution
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       imgRef.current = img;
       rebuildGeometry(img, canvas, settings, tileCol, tileRow, viewMode);
       setLoaded(true);
     };
-    img.src = canvas.toDataURL();
-  }, []);
+
+    if (data.imageUrl) {
+      // Load the actual project image
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => buildFromSource(img);
+      img.onerror = () => {
+        // Fall back to procedural pattern if image fails to load
+        buildProceduralPattern(ctx, canvas);
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => buildFromSource(fallbackImg);
+        fallbackImg.src = canvas.toDataURL();
+      };
+      img.src = data.imageUrl;
+    } else {
+      // No image available — generate a procedural placeholder
+      buildProceduralPattern(ctx, canvas);
+      const img = new Image();
+      img.onload = () => buildFromSource(img);
+      img.src = canvas.toDataURL();
+    }
+  }, [data.imageUrl]);
 
   const rebuildGeometry = useCallback(
     (
@@ -420,15 +444,23 @@ function SharedViewer({ data, token }: { data: ShareData; token: string }) {
         {isGrid && (
           <div className="flex items-center gap-2">
             <span className="font-mono text-[10px] text-dim uppercase">Tile</span>
-            <div className="flex gap-1">
-              {Array.from({ length: (settings.gc || 1) * (settings.gr || 1) }).map(
-                (_, i) => {
-                  const col = (i % (settings.gc || 1)) + 1;
-                  const row = Math.floor(i / (settings.gc || 1)) + 1;
+            <div className="flex gap-1 flex-wrap">
+              {(() => {
+                const gc = settings.gc || 1;
+                const gr = settings.gr || 1;
+                const buttons: { col: number; row: number; idx: number }[] = [];
+                // Match editor ordering: rows go top-to-bottom (gr down to 1), cols left-to-right
+                let idx = 0;
+                for (let r = gr; r >= 1; r--) {
+                  for (let c = 1; c <= gc; c++) {
+                    buttons.push({ col: c, row: r, idx: idx++ });
+                  }
+                }
+                return buttons.map(({ col, row, idx }) => {
                   const active = col === tileCol && row === tileRow;
                   return (
                     <button
-                      key={i}
+                      key={idx}
                       onClick={() => handleTileChange(col, row)}
                       className={`w-7 h-7 font-mono text-[10px] rounded border transition-colors ${
                         active
@@ -439,8 +471,8 @@ function SharedViewer({ data, token }: { data: ShareData; token: string }) {
                       {col},{row}
                     </button>
                   );
-                }
-              )}
+                });
+              })()}
             </div>
           </div>
         )}

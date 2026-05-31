@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { formatBytes } from '@/lib/utils';
 
 interface ExportRecord {
   id: string;
@@ -59,8 +60,19 @@ export default function ExportHistory({ projectId }: { projectId: string }) {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(exports.length / pageSize));
+
+  // Clamp page to valid range when data changes (exports added/removed)
+  const prevLenRef = useRef(exports.length);
+  useEffect(() => {
+    if (exports.length !== prevLenRef.current) {
+      prevLenRef.current = exports.length;
+      const maxPage = Math.max(0, totalPages - 1);
+      if (page > maxPage) setPage(maxPage);
+    }
+  }, [exports.length, totalPages, page]);
+
   const paginatedExports = exports.slice(page * pageSize, (page + 1) * pageSize);
-  const totalPages = Math.ceil(exports.length / pageSize);
 
   if (exports.length === 0 && !loading) {
     return null;
@@ -188,8 +200,4 @@ function formatLabel(format: string): string {
   }
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+

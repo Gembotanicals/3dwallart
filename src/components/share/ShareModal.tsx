@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface ShareModalProps {
   projectId: string;
@@ -16,6 +17,15 @@ export default function ShareModal({ projectId, onClose }: ShareModalProps) {
   const [expiry, setExpiry] = useState<number>(7);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleGenerate = useCallback(async () => {
     setLoading(true);
@@ -73,8 +83,18 @@ export default function ShareModal({ projectId, onClose }: ShareModalProps) {
   }, [fullUrl]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-panel border border-line rounded-lg w-full max-w-md shadow-xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="bg-panel border border-line rounded-lg w-full max-w-md shadow-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Share Project"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-line">
           <h2 className="font-heading text-lg text-ink">Share Project</h2>
@@ -106,19 +126,12 @@ export default function ShareModal({ projectId, onClose }: ShareModalProps) {
                 </button>
               </div>
 
-              {/* QR placeholder */}
+              {/* QR code — real, scannable */}
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-panel2 border border-line rounded flex items-center justify-center">
-                  <div className="grid grid-cols-4 gap-[2px] w-10 h-10">
-                    {Array.from({ length: 16 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`rounded-[1px] ${
-                          Math.random() > 0.4 ? 'bg-ink' : 'bg-panel2'
-                        }`}
-                      />
-                    ))}
-                  </div>
+                <div className="w-16 h-16 bg-white rounded flex items-center justify-center p-1">
+                  {fullUrl && (
+                    <QRCodeSVG value={fullUrl} size={56} level="M" />
+                  )}
                 </div>
                 <div className="font-mono text-[10px] text-dim leading-[1.5]">
                   QR CODE

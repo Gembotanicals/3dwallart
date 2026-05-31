@@ -15,6 +15,7 @@ export default function ExportBar() {
 
   return (
     <div className="border-t border-line py-3 px-4 flex gap-3 items-center bg-panel flex-wrap">
+      <span className="font-mono text-[10px] text-dim uppercase tracking-wider">Quick Download</span>
       <button
         disabled={!hasImage}
         onClick={() => exportTile()}

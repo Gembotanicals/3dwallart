@@ -42,6 +42,20 @@ export async function POST(req: NextRequest) {
     const limits = PLAN_LIMITS[user.plan] || PLAN_LIMITS.FREE;
     const requestedRes = resolution || 220;
 
+    // Check format access (same as single export route)
+    if (format === "OBJ" && !limits.canExportOBJ) {
+      return NextResponse.json(
+        { error: "OBJ export requires PRO plan or higher", upgradeRequired: true },
+        { status: 403 }
+      );
+    }
+    if (format === "THREE_MF" && !limits.canExport3MF) {
+      return NextResponse.json(
+        { error: "3MF export requires PRO plan or higher", upgradeRequired: true },
+        { status: 403 }
+      );
+    }
+
     // Validate resolution bounds
     if (requestedRes < 50) {
       return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import bcrypt from "bcrypt";
+import { getSignedUrl } from "@/lib/r2";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export async function GET(
@@ -19,6 +20,7 @@ export async function GET(
             name: true,
             settings: true,
             thumbnailUrl: true,
+            imageId: true,
           },
         },
       },
@@ -72,11 +74,28 @@ export async function GET(
       data: { views: { increment: 1 } },
     });
 
-    // Return project settings (not the full project)
+    // Generate signed image URL if project has an image
+    let imageUrl: string | null = null;
+    if (shareLink.project.imageId) {
+      try {
+        const image = await prisma.image.findUnique({
+          where: { id: shareLink.project.imageId },
+          select: { url: true },
+        });
+        if (image?.url) {
+          imageUrl = await getSignedUrl(image.url, 3600);
+        }
+      } catch {
+        // Best-effort — fall back to no image
+      }
+    }
+
+    // Return project settings + image for the viewer
     return NextResponse.json({
       projectName: shareLink.project.name,
       settings: shareLink.project.settings,
       thumbnailUrl: shareLink.project.thumbnailUrl,
+      imageUrl,
       views: shareLink.views + 1,
       passwordProtected: !!shareLink.password,
       expiresAt: shareLink.expiresAt,

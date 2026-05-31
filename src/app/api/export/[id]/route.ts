@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { deleteFile, getSignedUrl } from "@/lib/r2";
-import { stlQueue } from "@/lib/queue";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export async function GET(
@@ -27,22 +26,6 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Try to get job progress from BullMQ
-    let progress: number | undefined;
-    if (stlQueue && exportRecord.status === "PROCESSING") {
-      try {
-        const jobs = await stlQueue.getJobs(["active"]);
-        const activeJob = jobs.find(
-          (j) => j.data?.exportId === exportRecord.id
-        );
-        if (activeJob) {
-          progress = activeJob.progress as number;
-        }
-      } catch {
-        // Queue might not be available, that's ok
-      }
-    }
-
     // Generate a pre-signed download URL for completed exports
     let downloadUrl: string | undefined;
     if (exportRecord.status === "COMPLETED" && exportRecord.url) {
@@ -59,7 +42,7 @@ export async function GET(
       status: exportRecord.status,
       url: downloadUrl,
       errorMsg: exportRecord.errorMsg,
-      progress: progress ?? undefined,
+      progress: undefined, // Inline mode has no progress tracking
       format: exportRecord.format,
       resolution: exportRecord.resolution,
       fileSize: exportRecord.fileSize,
@@ -98,25 +81,12 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // If PENDING, try to remove from queue
-    if (exportRecord.status === "PENDING" && stlQueue) {
-      try {
-        const waitingJobs = await stlQueue.getJobs(["waiting"]);
-        const job = waitingJobs.find(
-          (j) => j.data?.exportId === exportRecord.id
-        );
-        if (job) {
-          await job.remove();
-        }
-      } catch {
-        // Queue might not be available
-      }
-    }
-
     // If COMPLETED, delete the R2 file (url field stores the key directly)
+    let fileSizeFreed = 0;
     if (exportRecord.status === "COMPLETED" && exportRecord.url) {
       try {
         await deleteFile(exportRecord.url);
+        fileSizeFreed = exportRecord.fileSize || 0;
       } catch (err) {
         console.warn("[api/export/[id]] Failed to delete R2 file:", err);
       }
@@ -126,6 +96,20 @@ export async function DELETE(
     await prisma.export.delete({
       where: { id: params.id },
     });
+
+    // Decrement user's storageUsed by the freed file size
+    if (fileSizeFreed > 0) {
+      await prisma.user.update({
+        where: { id: exportRecord.project.userId },
+        data: {
+          storageUsed: {
+            decrement: fileSizeFreed,
+          },
+        },
+      }).catch((err) => {
+        console.warn("[api/export/[id]] Failed to decrement storageUsed:", err);
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

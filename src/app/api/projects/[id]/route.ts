@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { deleteFile, extractKeyFromUrl } from "@/lib/r2";
+import { deleteFile } from "@/lib/r2";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 async function getProjectWithAuth(id: string, userId: string) {
@@ -114,11 +114,28 @@ export async function DELETE(
       }
     }
 
+    // Collect file sizes before deleting records (for storage decrement)
+    const exportSizes = await prisma.export.findMany({
+      where: { projectId: params.id, status: "COMPLETED" },
+      select: { fileSize: true },
+    });
+    const totalExportSize = exportSizes.reduce((sum, e) => sum + (e.fileSize || 0), 0);
+
     // Best-effort delete all files from R2
     await Promise.allSettled(filesToDelete.map((key) => deleteFile(key)));
 
     // Cascade deletes handled by Prisma (onDelete: Cascade on exports and shareLinks)
     await prisma.project.delete({ where: { id: params.id } });
+
+    // Decrement user's storageUsed by the freed file sizes
+    if (totalExportSize > 0) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { storageUsed: { decrement: totalExportSize } },
+      }).catch((err) => {
+        console.warn("[api/projects/[id]] Failed to decrement storageUsed:", err);
+      });
+    }
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

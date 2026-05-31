@@ -216,10 +216,11 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         if (!cancelled) setLoadError(true);
       } finally {
         if (!cancelled) {
+          // Sync lastSettingsRef BEFORE clearing isLoadingRef to prevent
+          // the auto-save effect from firing between the two updates.
+          lastSettingsRef.current = JSON.stringify(useEditorStore.getState().settings);
           isLoadingRef.current = false;
           useEditorStore.setState({ isLoading: false });
-          // Sync lastSettingsRef so auto-save doesn't fire for loaded settings
-          lastSettingsRef.current = JSON.stringify(useEditorStore.getState().settings);
         }
       }
     }
