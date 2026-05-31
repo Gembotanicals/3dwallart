@@ -192,21 +192,27 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         }
 
         // If project has an imageId, load the image
+        console.log('[Editor] Project imageId:', project.imageId);
         if (project.imageId) {
           try {
             // First get image metadata
             const imgRes = await fetch(`/api/images/${project.imageId}`);
+            console.log('[Editor] Image metadata response:', imgRes.status);
             if (imgRes.ok) {
               const imageData = await imgRes.json();
+              console.log('[Editor] Image found:', imageData.originalName, imageData.url ? 'has-url' : 'no-url');
               // Fetch image content through our server proxy (?download=true)
               // This avoids R2 CORS issues entirely — the server fetches from R2
               // and streams to the browser as same-origin
               const blobRes = await fetch(`/api/images/${project.imageId}?download=true`);
+              console.log('[Editor] Image download response:', blobRes.status);
               if (blobRes.ok) {
                 const blob = await blobRes.blob();
+                console.log('[Editor] Image blob size:', blob.size, 'type:', blob.type);
                 const blobUrl = URL.createObjectURL(blob);
                 const im = new Image();
                 im.onload = () => {
+                  console.log('[Editor] Image loaded into HTMLImage:', im.width, 'x', im.height);
                   if (!cancelled) {
                     useEditorStore.getState().setImage(im, imageData.originalName);
                   }
@@ -215,11 +221,16 @@ export default function EditorPage({ params }: { params: { id: string } }) {
                   console.error('Failed to decode project image blob');
                 };
                 im.src = blobUrl;
+              } else {
+                const errText = await blobRes.text();
+                console.error('[Editor] Image download failed:', blobRes.status, errText);
               }
             }
           } catch (err) {
             console.error('Failed to load project image:', err);
           }
+        } else {
+          console.log('[Editor] No imageId on project — image was never saved');
         }
       } catch (e) {
         console.error('Failed to load project:', e);

@@ -151,23 +151,41 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
           // Upload to server and save imageId to project
           if (projectId) {
             try {
+              console.log('[ControlPanel] Uploading image:', file.name, file.size, 'bytes');
               const formData = new FormData();
               formData.append('file', file);
               const uploadRes = await fetch('/api/upload', {
                 method: 'POST',
                 body: formData,
               });
-              if (uploadRes.ok) {
-                const image = await uploadRes.json();
-                // Save imageId to project
-                await fetch(`/api/projects/${projectId}`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ imageId: image.id }),
-                });
+              
+              if (!uploadRes.ok) {
+                const errData = await uploadRes.json().catch(() => ({}));
+                console.error('[ControlPanel] Upload failed:', uploadRes.status, errData);
+                useEditorStore.getState().showToast('Image upload failed');
+                return;
+              }
+              
+              const image = await uploadRes.json();
+              console.log('[ControlPanel] Upload success, imageId:', image.id);
+              
+              // Save imageId to project
+              const saveRes = await fetch(`/api/projects/${projectId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageId: image.id }),
+              });
+              
+              if (!saveRes.ok) {
+                console.error('[ControlPanel] Failed to save imageId to project:', saveRes.status);
+                useEditorStore.getState().showToast('Image saved but project link failed');
+              } else {
+                console.log('[ControlPanel] imageId saved to project');
+                useEditorStore.getState().showToast('Image uploaded & saved');
               }
             } catch (err) {
-              console.error('Failed to upload image:', err);
+              console.error('[ControlPanel] Upload error:', err);
+              useEditorStore.getState().showToast('Image upload error');
             }
           }
         };

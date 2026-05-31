@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
 
     // Generate storage key
     const filename = generateKey(user.id, file.name);
+    console.log(`[upload] User ${user.id} uploading ${file.name} (${file.size} bytes) as ${filename}`);
 
     // Process image with sharp (optional - graceful fallback)
     let width = 0;
