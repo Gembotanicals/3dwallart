@@ -39,6 +39,9 @@ export const DEFAULT_SETTINGS: ReliefSettings = {
   mw: 6,
   mr: 5,
   res: 220,
+  puzzleOn: false,
+  puzzleSize: 20,
+  puzzleExtent: 8,
 };
 
 interface EditorState {

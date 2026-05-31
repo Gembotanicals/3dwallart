@@ -29,6 +29,9 @@ export interface ServerReliefSettings {
   mw: number;
   mr: number;
   res: number;
+  puzzleOn: boolean;
+  puzzleSize: number;
+  puzzleExtent: number;
 }
 
 export interface ServerHeightGrid {
@@ -285,6 +288,145 @@ function notchWalls(
   }
 }
 
+
+// ---- Puzzle (jigsaw) tab profile (server-side) ----
+
+function smoothstep(t: number): number {
+  t = Math.max(0, Math.min(1, t));
+  return t * t * (3 - 2 * t);
+}
+
+function jigsawProfile(edgeLen: number, tabSize: number, extent: number): [number, number][] {
+  const pts: [number, number][] = [];
+  const center = edgeLen / 2;
+  const halfTab = tabSize / 2;
+  const neckFrac = 0.3;
+  const N = 48;
+
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const along = center - halfTab + t * tabSize;
+    let offset = 0;
+
+    if (t < 0.1) {
+      const u = t / 0.1;
+      offset = smoothstep(u) * neckFrac * extent;
+    } else if (t < 0.25) {
+      const u = (t - 0.1) / 0.15;
+      offset = (neckFrac + smoothstep(u) * (1 - neckFrac)) * extent;
+    } else if (t < 0.75) {
+      const u = (t - 0.25) / 0.5;
+      const bulge = Math.sin(u * Math.PI) * 0.1;
+      offset = (1 + bulge) * extent;
+    } else if (t < 0.9) {
+      const u = (t - 0.75) / 0.15;
+      offset = (1 - smoothstep(u) * (1 - neckFrac)) * extent;
+    } else {
+      const u = (t - 0.9) / 0.1;
+      offset = (1 - smoothstep(u)) * neckFrac * extent;
+    }
+
+    pts.push([along, offset]);
+  }
+  return pts;
+}
+
+function puzzleTab(
+  V: number[], edgeAxis: 'x' | 'y', edgePos: number,
+  edgeStart: number, edgeEnd: number, dir: number,
+  zTop: number, tabSize: number, extent: number
+) {
+  const profile = jigsawProfile(edgeEnd - edgeStart, tabSize, extent);
+  const q = (a: number[], b: number[], c: number[], d: number[]) => {
+    V.push(...a, ...b, ...c, ...a, ...c, ...d);
+  };
+
+  for (let i = 0; i < profile.length - 1; i++) {
+    const [a1, o1] = profile[i];
+    const [a2, o2] = profile[i + 1];
+    const y1 = edgeStart + a1;
+    const y2 = edgeStart + a2;
+
+    if (edgeAxis === 'x') {
+      const ex = edgePos;
+      const p1 = ex + dir * o1;
+      const p2 = ex + dir * o2;
+      q([ex, y1, zTop], [ex, y2, zTop], [p2, y2, zTop], [p1, y1, zTop]);
+      q([ex, y1, 0], [p1, y1, 0], [p2, y2, 0], [ex, y2, 0]);
+      q([p1, y1, 0], [p1, y1, zTop], [p2, y2, zTop], [p2, y2, 0]);
+    } else {
+      const ey = edgePos;
+      const p1 = ey + dir * o1;
+      const p2 = ey + dir * o2;
+      q([y1, ey, zTop], [y2, ey, zTop], [y2, p2, zTop], [y1, p1, zTop]);
+      q([y1, ey, 0], [y1, p1, 0], [y2, p2, 0], [y2, ey, 0]);
+      q([y1, p1, 0], [y1, p1, zTop], [y2, p2, zTop], [y2, p2, 0]);
+    }
+  }
+
+  const [fa, fo] = profile[0];
+  const [la, lo] = profile[profile.length - 1];
+  const fy = edgeStart + fa;
+  const ly = edgeStart + la;
+
+  if (edgeAxis === 'x') {
+    const ex = edgePos;
+    q([ex, fy, 0], [ex, fy, zTop], [ex + dir * fo, fy, zTop], [ex + dir * fo, fy, 0]);
+    q([ex, ly, 0], [ex + dir * lo, ly, 0], [ex + dir * lo, ly, zTop], [ex, ly, zTop]);
+  } else {
+    const ey = edgePos;
+    q([fy, ey, 0], [fy, ey + dir * fo, 0], [fy, ey + dir * fo, zTop], [fy, ey, zTop]);
+    q([ly, ey, 0], [ly, ey, zTop], [ly, ey + dir * lo, zTop], [ly, ey + dir * lo, 0]);
+  }
+}
+
+function puzzleBlank(
+  V: number[], edgeAxis: 'x' | 'y', edgePos: number,
+  edgeStart: number, edgeEnd: number, dir: number,
+  zTop: number, tabSize: number, extent: number
+) {
+  const profile = jigsawProfile(edgeEnd - edgeStart, tabSize, extent);
+  const q = (a: number[], b: number[], c: number[], d: number[]) => {
+    V.push(...a, ...b, ...c, ...a, ...c, ...d);
+  };
+
+  for (let i = 0; i < profile.length - 1; i++) {
+    const [a1, o1] = profile[i];
+    const [a2, o2] = profile[i + 1];
+    const y1 = edgeStart + a1;
+    const y2 = edgeStart + a2;
+
+    if (edgeAxis === 'x') {
+      const ex = edgePos;
+      const p1 = ex + dir * o1;
+      const p2 = ex + dir * o2;
+      q([ex, y1, zTop], [p1, y1, zTop], [p2, y2, zTop], [ex, y2, zTop]);
+      q([p1, y1, 0], [p2, y2, 0], [p2, y2, zTop], [p1, y1, zTop]);
+    } else {
+      const ey = edgePos;
+      const p1 = ey + dir * o1;
+      const p2 = ey + dir * o2;
+      q([y1, ey, zTop], [y1, p1, zTop], [y2, p2, zTop], [y2, ey, zTop]);
+      q([y1, p1, 0], [y1, p1, zTop], [y2, p2, zTop], [y2, p2, 0]);
+    }
+  }
+
+  const [fa, fo] = profile[0];
+  const [la, lo] = profile[profile.length - 1];
+  const fy = edgeStart + fa;
+  const ly = edgeStart + la;
+
+  if (edgeAxis === 'x') {
+    const ex = edgePos;
+    q([ex, fy, 0], [ex + dir * fo, fy, 0], [ex + dir * fo, fy, zTop], [ex, fy, zTop]);
+    q([ex, ly, 0], [ex, ly, zTop], [ex + dir * lo, ly, zTop], [ex + dir * lo, ly, 0]);
+  } else {
+    const ey = edgePos;
+    q([fy, ey, 0], [fy, ey, zTop], [fy, ey + dir * lo, zTop], [fy, ey + dir * lo, 0]);
+    q([ly, ey, 0], [ly, ey + dir * lo, 0], [ly, ey + dir * lo, zTop], [ly, ey, zTop]);
+  }
+}
+
 // ---- Build panel geometry (server-side) ----
 
 export function buildGeometryServer(
@@ -312,15 +454,19 @@ export function buildGeometryServer(
   const to_ = s.to;
   const clr = s.tc;
 
+  const usePuzzle = s.puzzleOn;
+  const puzzleSz = s.puzzleSize;
+  const puzzleExt = s.puzzleExtent;
+
   const notches: { x0: number; y0: number; x1: number; y1: number }[] = [];
-  if (s.join && hasL)
+  if (s.join && !usePuzzle && hasL)
     notches.push({
       x0: -1,
       y0: H / 2 + oy - (tw + 2 * clr) / 2,
       x1: to_ + clr,
       y1: H / 2 + oy + (tw + 2 * clr) / 2,
     });
-  if (s.join && hasD)
+  if (s.join && !usePuzzle && hasD)
     notches.push({
       x0: W / 2 + ox - (tw + 2 * clr) / 2,
       y0: -1,
@@ -331,6 +477,14 @@ export function buildGeometryServer(
     notches.some(
       (n) => cx > n.x0 && cx < n.x1 && cy > n.y0 && cy < n.y1
     );
+
+  const puzzleBlanks: { edge: 'left' | 'bottom'; center: number; halfSize: number; extent: number }[] = [];
+  if (usePuzzle && hasL) puzzleBlanks.push({ edge: 'left', center: H / 2, halfSize: puzzleSz / 2, extent: puzzleExt });
+  if (usePuzzle && hasD) puzzleBlanks.push({ edge: 'bottom', center: W / 2, halfSize: puzzleSz / 2, extent: puzzleExt });
+  const inPuzzleBlank = (cx: number, cy: number) => puzzleBlanks.some(b => {
+    if (b.edge === 'left') return cx < b.extent * 1.2 && Math.abs(cy - b.center) < b.halfSize;
+    return cy < b.extent * 1.2 && Math.abs(cx - b.center) < b.halfSize;
+  });
 
   // top relief
   for (let y = 0; y < ny - 1; y++) {
@@ -363,13 +517,23 @@ export function buildGeometryServer(
   for (let x = 0; x < nx - 1; x++) {
     const xa = x * dx,
       xb = (x + 1) * dx;
-    if (!inNotch((xa + xb) / 2, 0.5))
-      q(
-        [xa, 0, 0],
-        [xb, 0, 0],
-        [xb, 0, Z(x + 1, 0)],
-        [xa, 0, Z(x, 0)]
-      );
+    if (!inNotch((xa + xb) / 2, 0.5)) {
+      if (inPuzzleBlank((xa + xb) / 2, 0.5)) {
+        q(
+          [xa, 0, base],
+          [xb, 0, base],
+          [xb, 0, Z(x + 1, 0)],
+          [xa, 0, Z(x, 0)]
+        );
+      } else {
+        q(
+          [xa, 0, 0],
+          [xb, 0, 0],
+          [xb, 0, Z(x + 1, 0)],
+          [xa, 0, Z(x, 0)]
+        );
+      }
+    }
     q(
       [xb, H, 0],
       [xa, H, 0],
@@ -380,13 +544,23 @@ export function buildGeometryServer(
   for (let y = 0; y < ny - 1; y++) {
     const ya = y * dy,
       yb = (y + 1) * dy;
-    if (!inNotch(0.5, (ya + yb) / 2))
-      q(
-        [0, yb, 0],
-        [0, ya, 0],
-        [0, ya, Z(0, y)],
-        [0, yb, Z(0, y + 1)]
-      );
+    if (!inNotch(0.5, (ya + yb) / 2)) {
+      if (inPuzzleBlank(0.5, (ya + yb) / 2)) {
+        q(
+          [0, yb, base],
+          [0, ya, base],
+          [0, ya, Z(0, y)],
+          [0, yb, Z(0, y + 1)]
+        );
+      } else {
+        q(
+          [0, yb, 0],
+          [0, ya, 0],
+          [0, ya, Z(0, y)],
+          [0, yb, Z(0, y + 1)]
+        );
+      }
+    }
     q(
       [W, ya, 0],
       [W, yb, 0],
@@ -398,48 +572,66 @@ export function buildGeometryServer(
   for (const n of notches) {
     notchWalls(V, n, W, H, base + relief);
   }
-  // tabs
-  if (s.join && hasR) {
-    const tabY = H / 2 + oy - tw / 2;
-    reliefTab(
-      V,
-      hg,
-      s.tcol + 1,
-      s.trow,
-      W,
-      tabY,
-      to_,
-      tw,
-      dx,
-      dy,
-      (u, v) => [u, tabY + v],
-      s
-    );
+  // tabs (regular join or puzzle)
+  if (!usePuzzle) {
+    if (s.join && hasR) {
+      const tabY = H / 2 + oy - tw / 2;
+      reliefTab(
+        V,
+        hg,
+        s.tcol + 1,
+        s.trow,
+        W,
+        tabY,
+        to_,
+        tw,
+        dx,
+        dy,
+        (u, v) => [u, tabY + v],
+        s
+      );
+    }
+    if (s.join && hasU) {
+      const tabX = W / 2 + ox - tw / 2;
+      reliefTab(
+        V,
+        hg,
+        s.tcol,
+        s.trow + 1,
+        tabX,
+        H,
+        tw,
+        to_,
+        dx,
+        dy,
+        (u, v) => [tabX + u, v],
+        s
+      );
+    }
+  } else {
+    if (hasR) {
+      puzzleTab(V, 'x', W, 0, H, 1, base, puzzleSz, puzzleExt);
+    }
+    if (hasU) {
+      puzzleTab(V, 'y', H, 0, W, 1, base, puzzleSz, puzzleExt);
+    }
+    if (hasL) {
+      puzzleBlank(V, 'x', 0, 0, H, 1, base, puzzleSz, puzzleExt);
+    }
+    if (hasD) {
+      puzzleBlank(V, 'y', 0, 0, W, 1, base, puzzleSz, puzzleExt);
+    }
   }
-  if (s.join && hasU) {
-    const tabX = W / 2 + ox - tw / 2;
-    reliefTab(
-      V,
-      hg,
-      s.tcol,
-      s.trow + 1,
-      tabX,
-      H,
-      tw,
-      to_,
-      dx,
-      dy,
-      (u, v) => [tabX + u, v],
-      s
-    );
-  }
+
+  const bboxW = usePuzzle ? (hasR ? W + puzzleExt : W) : (hasR ? W + to_ : W);
+  const bboxH = usePuzzle ? (hasU ? H + puzzleExt : H) : (hasU ? H + to_ : H);
 
   return {
     array: new Float32Array(V),
     tris: V.length / 9,
     nx,
     ny,
-    bbox: [hasR ? W + to_ : W, hasU ? H + to_ : H, base + relief],
+    bbox: [bboxW, bboxH, base + relief],
   };
 }
 

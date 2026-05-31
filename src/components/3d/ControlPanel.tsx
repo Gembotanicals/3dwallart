@@ -421,6 +421,42 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
         </div>
       </Section>
 
+      {/* PUZZLE TABS */}
+      <Section>
+        <SectionHeader>Puzzle Tabs (Jigsaw)</SectionHeader>
+        <div className="px-[18px] pb-[18px]">
+          <Checkbox
+            label="Jigsaw puzzle edge connectors"
+            checked={settings.puzzleOn}
+            onChange={(v) => setSetting('puzzleOn', v)}
+          />
+          <Note>
+            Curved jigsaw tabs on right/top edges, matching sockets on left/bottom. Tiles interlock like puzzle pieces. Overrides standard joining when enabled.
+          </Note>
+
+          <SliderRow
+            label="Tab size"
+            value={settings.puzzleSize}
+            min={10}
+            max={40}
+            step={1}
+            onChange={(v) => setSetting('puzzleSize', v)}
+            format={(v) => v.toFixed(0)}
+            unit="mm"
+          />
+          <SliderRow
+            label="Tab reach"
+            value={settings.puzzleExtent}
+            min={4}
+            max={14}
+            step={0.5}
+            onChange={(v) => setSetting('puzzleExtent', v)}
+            format={(v) => v.toFixed(1)}
+            unit="mm"
+          />
+        </div>
+      </Section>
+
       {/* COLOR */}
       <Section>
         <SectionHeader>Color (Height Bands)</SectionHeader>
