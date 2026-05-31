@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { deleteFile } from "@/lib/r2";
+import { deleteFile, getSignedUrl } from "@/lib/r2";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,22 @@ export async function GET(
       return NextResponse.json({ error: "Image not found" }, { status: 404 });
     }
 
-    return NextResponse.json(image);
+    // Generate signed URLs for R2 keys
+    let url = image.url;
+    if (url && !url.startsWith('http')) {
+      url = await getSignedUrl(url, 3600);
+    }
+
+    let thumbnailUrl = image.thumbnailUrl;
+    if (thumbnailUrl && !thumbnailUrl.startsWith('http')) {
+      thumbnailUrl = await getSignedUrl(thumbnailUrl, 3600);
+    }
+
+    return NextResponse.json({
+      ...image,
+      url,
+      thumbnailUrl,
+    });
   } catch (error) {
     console.error("Get image error:", error);
     return NextResponse.json(

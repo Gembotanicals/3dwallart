@@ -60,6 +60,7 @@ export async function PUT(
     if (body.name !== undefined) updateData.name = body.name;
     if (body.thumbnailUrl !== undefined) updateData.thumbnailUrl = body.thumbnailUrl;
     if (body.stlUrl !== undefined) updateData.stlUrl = body.stlUrl;
+    if (body.imageId !== undefined) updateData.imageId = body.imageId;
 
     // Auto-increment version on settings change
     if (body.settings !== undefined) {

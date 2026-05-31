@@ -125,7 +125,7 @@ function Note({ children }: { children: React.ReactNode }) {
 
 /* ---- Control Panel ---- */
 
-export default function ControlPanel() {
+export default function ControlPanel({ projectId }: { projectId?: string }) {
   const settings = useEditorStore((s) => s.settings);
   const setSetting = useEditorStore((s) => s.setSetting);
   const setImage = useEditorStore((s) => s.setImage);
@@ -137,20 +137,45 @@ export default function ControlPanel() {
   const bands = useEditorStore((s) => s.bands);
 
   const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
+    async (acceptedFiles: File[]) => {
       const file = acceptedFiles[0];
       if (!file) return;
+      
+      // Load image locally first
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         const im = new Image();
-        im.onload = () => {
+        im.onload = async () => {
           setImage(im, file.name);
+          
+          // Upload to server and save imageId to project
+          if (projectId) {
+            try {
+              const formData = new FormData();
+              formData.append('file', file);
+              const uploadRes = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+              });
+              if (uploadRes.ok) {
+                const image = await uploadRes.json();
+                // Save imageId to project
+                await fetch(`/api/projects/${projectId}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ imageId: image.id }),
+                });
+              }
+            } catch (err) {
+              console.error('Failed to upload image:', err);
+            }
+          }
         };
         im.src = e.target?.result as string;
       };
       reader.readAsDataURL(file);
     },
-    [setImage]
+    [setImage, projectId]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

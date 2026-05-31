@@ -186,6 +186,26 @@ export default function EditorPage({ params }: { params: { id: string } }) {
             }
           });
         }
+
+        // If project has an imageId, load the image
+        if (project.imageId) {
+          try {
+            const imgRes = await fetch(`/api/images/${project.imageId}`);
+            if (imgRes.ok) {
+              const imageData = await imgRes.json();
+              const im = new Image();
+              im.crossOrigin = 'anonymous';
+              im.onload = () => {
+                if (!cancelled) {
+                  useEditorStore.getState().setImage(im, imageData.originalName);
+                }
+              };
+              im.src = imageData.url;
+            }
+          } catch (err) {
+            console.error('Failed to load project image:', err);
+          }
+        }
       } catch (e) {
         console.error('Failed to load project:', e);
       }
@@ -354,7 +374,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
 
       {/* Main layout */}
       <div className="flex flex-1 min-h-0">
-        <ControlPanel />
+        <ControlPanel projectId={params.id} />
         <div className="flex-1 flex flex-col min-w-0 relative">
           <div className="flex-1 min-h-0 relative flex flex-col">
             <ReliefViewer />

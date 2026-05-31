@@ -67,6 +67,7 @@ model Project {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String   @default("Untitled Project")
   settings     Json     @default("{}") // All relief/panel/grid/joining/color settings as JSON
+  imageId      String?
   thumbnailUrl String?
   stlUrl       String?
   version      Int      @default(1)
