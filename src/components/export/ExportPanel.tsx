@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '@/lib/store';
 import ExportHistory from './ExportHistory';
 
@@ -49,6 +49,18 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
     total: 0,
     error: null,
   });
+  const mountedRef = useRef(true);
+  const pollTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      pollTimersRef.current.forEach(clearTimeout);
+      pollTimersRef.current = [];
+    };
+  }, []);
 
   // Get image data URL from the source canvas
   const getImageDataUrl = useCallback((): string | null => {
@@ -69,8 +81,10 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
   // Poll export status
   const pollExport = useCallback(async (exportId: string) => {
     const poll = async () => {
+      if (!mountedRef.current) return;
       try {
         const res = await fetch(`/api/export/${exportId}`);
+        if (!mountedRef.current) return;
         const data = await res.json();
         
         setExportState((prev) => ({
@@ -83,13 +97,15 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
         }));
 
         if (data.status === 'PENDING' || data.status === 'PROCESSING') {
-          setTimeout(poll, 2000);
+          const timer = setTimeout(poll, 2000);
+          pollTimersRef.current.push(timer);
         } else if (data.status === 'COMPLETED') {
           showToast('Export complete!');
         } else if (data.status === 'FAILED') {
           showToast('Export failed');
         }
       } catch (err) {
+        if (!mountedRef.current) return;
         setExportState((prev) => ({
           ...prev,
           exporting: false,
@@ -206,10 +222,12 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
 
       // Poll batch status
       const pollBatch = async () => {
+        if (!mountedRef.current) return;
         try {
           const pollRes = await fetch(
             `/api/export/batch?exportIds=${data.exportIds.join(',')}`
           );
+          if (!mountedRef.current) return;
           const pollData = await pollRes.json();
 
           setBatchState((prev) => ({
@@ -220,11 +238,13 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
           }));
 
           if (!pollData.summary.allDone) {
-            setTimeout(pollBatch, 3000);
+            const timer = setTimeout(pollBatch, 3000);
+            pollTimersRef.current.push(timer);
           } else {
             showToast(`Batch export complete: ${pollData.summary.completed} tiles`);
           }
         } catch {
+          if (!mountedRef.current) return;
           setBatchState((prev) => ({
             ...prev,
             exporting: false,
@@ -232,7 +252,8 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
           }));
         }
       };
-      setTimeout(pollBatch, 2000);
+      const batchTimer = setTimeout(pollBatch, 2000);
+      pollTimersRef.current.push(batchTimer);
     } catch (err: any) {
       setBatchState((prev) => ({
         ...prev,

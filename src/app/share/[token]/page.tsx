@@ -131,9 +131,9 @@ function PasswordForm({
     setErrorMsg('');
 
     try {
-      const res = await fetch(
-        `/api/share/${token}?password=${encodeURIComponent(password)}`
-      );
+      const res = await fetch(`/api/share/${token}`, {
+        headers: { 'x-share-password': password },
+      });
       const data = await res.json();
       if (res.ok) {
         onSubmit(data);

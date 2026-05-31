@@ -53,15 +53,18 @@ interface EditorState {
   bands: BandInfo[];
   toast: string;
   toastTimeout: ReturnType<typeof setTimeout> | null;
+  isLoading: boolean;
 
   // Actions
   setSetting: <K extends keyof ReliefSettings>(key: K, value: ReliefSettings[K]) => void;
+  setSettings: (settings: Partial<ReliefSettings>) => void;
   setImage: (img: HTMLImageElement, name: string) => void;
   setTile: (col: number, row: number) => void;
   refresh: () => void;
   showToast: (msg: string) => void;
   exportTile: (res?: number) => void;
   exportAll: (res?: number) => void;
+  reset: () => void;
   resetView: boolean;
   setResetView: (v: boolean) => void;
 }
@@ -80,6 +83,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   bands: [],
   toast: '',
   toastTimeout: null,
+  isLoading: false,
   resetView: false,
 
   setSetting: (key, value) => {
@@ -194,4 +198,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setResetView: (v) => set({ resetView: v }),
+
+  reset: () => {
+    set({
+      settings: { ...DEFAULT_SETTINGS },
+      img: null,
+      imgName: '',
+      heightGrid: null,
+      geometry: null,
+      colorData: null,
+      colors: [],
+      bands: [],
+      isLoading: false,
+      resetView: false,
+    });
+  },
+
+  setSettings: (newSettings) => {
+    set((state) => {
+      const merged = { ...state.settings, ...newSettings };
+      // Recompute colors/bands if relevant settings changed
+      const colorKeys = ['colorOn', 'nc', 'bandMode', 'relief', 'base', 'invert'];
+      const needsColorUpdate = colorKeys.some(k => k in newSettings);
+      let colors = state.colors;
+      let bands = state.bands;
+      if (needsColorUpdate && merged.colorOn && state.img) {
+        colors = computeColors(state.img, merged.nc);
+        bands = computeBands(state.img, merged);
+      }
+      return { settings: merged, colors, bands };
+    });
+    if (get().img) get().refresh();
+  },
 }));

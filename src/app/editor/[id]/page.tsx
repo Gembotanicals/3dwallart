@@ -157,19 +157,22 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const thumbnailTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSettingsRef = useRef<string>('');
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const isLoadingRef = useRef(true);
 
-  // Load project on mount
+  // Load project on mount — reset store first to avoid stale state
   useEffect(() => {
     let cancelled = false;
+    isLoadingRef.current = true;
+    useEditorStore.getState().reset();
+    useEditorStore.setState({ isLoading: true });
+    lastSettingsRef.current = '';
 
     async function loadProject() {
       try {
         const res = await fetch(`/api/projects/${params.id}`);
         if (!res.ok) {
-          if (res.status === 404) {
-            setLoadError(true);
-            return;
-          }
+          if (cancelled) return;
+          setLoadError(true);
           return;
         }
         const project = await res.json();
@@ -177,14 +180,16 @@ export default function EditorPage({ params }: { params: { id: string } }) {
 
         setProjectName(project.name);
 
-        // If project has settings, populate the store
+        // If project has settings, apply them all at once (bulk) to avoid N refreshes
         if (project.settings && Object.keys(project.settings).length > 0) {
+          const validSettings: Record<string, any> = {};
           const store = useEditorStore.getState();
           Object.entries(project.settings).forEach(([key, value]) => {
             if (key in store.settings) {
-              store.setSetting(key as any, value as any);
+              validSettings[key] = value;
             }
           });
+          useEditorStore.getState().setSettings(validSettings);
         }
 
         // If project has an imageId, load the image
@@ -208,6 +213,14 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         }
       } catch (e) {
         console.error('Failed to load project:', e);
+        if (!cancelled) setLoadError(true);
+      } finally {
+        if (!cancelled) {
+          isLoadingRef.current = false;
+          useEditorStore.setState({ isLoading: false });
+          // Sync lastSettingsRef so auto-save doesn't fire for loaded settings
+          lastSettingsRef.current = JSON.stringify(useEditorStore.getState().settings);
+        }
       }
     }
 
@@ -215,11 +228,14 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     return () => { cancelled = true; };
   }, [params.id]);
 
-  // Auto-save on settings change (debounced 1000ms)
+  // Auto-save on settings change (debounced 1000ms) — skipped during initial load
   useEffect(() => {
+    // Don't auto-save while project is still loading
+    if (isLoadingRef.current) return;
+
     const settingsStr = JSON.stringify(settings);
 
-    // Skip first render and if settings haven't changed
+    // Skip if settings haven't changed
     if (settingsStr === lastSettingsRef.current) return;
     lastSettingsRef.current = settingsStr;
 
@@ -282,8 +298,9 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     thumbnailTimerRef.current = setInterval(async () => {
       try {
-        // Find the Three.js canvas
-        const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
+        // Find the Three.js canvas (inside the relief viewport, not the minimap)
+        const viewport = document.getElementById('relief-viewport');
+        const canvas = viewport?.querySelector('canvas') as HTMLCanvasElement | null;
         if (!canvas) return;
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.7);

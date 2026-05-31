@@ -6,6 +6,7 @@ import { ImageGrid } from "@/components/library/ImageGrid";
 import { ImageSearch } from "@/components/library/ImageSearch";
 import { StorageBar } from "@/components/library/StorageBar";
 import { Button } from "@/components/ui/Button";
+import AppHeader from "@/components/layout/AppHeader";
 import type { ImageData } from "@/types";
 
 interface ApiResponse {
@@ -86,14 +87,17 @@ export default function LibraryPage() {
   }, [fetchImages, fetchUserData]);
 
   return (
-    <main className="min-h-screen p-6 md:p-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <h1 className="font-heading text-3xl text-ink">Image Library</h1>
-        {userData && (
-          <StorageBar used={userData.storageUsed} plan={userData.plan} />
-        )}
-      </div>
+    <main className="min-h-screen">
+      <AppHeader />
+
+      <div className="p-6 md:p-8">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h1 className="font-heading text-3xl text-ink">Image Library</h1>
+          {userData && (
+            <StorageBar used={userData.storageUsed} plan={userData.plan} />
+          )}
+        </div>
 
       {/* Search */}
       <div className="mb-4">
@@ -139,6 +143,7 @@ export default function LibraryPage() {
           </Button>
         </div>
       )}
+      </div>
     </main>
   );
 }

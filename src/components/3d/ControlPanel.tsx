@@ -429,12 +429,12 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
             label="Map colors to height bands"
             checked={settings.colorOn}
             onChange={(v) => {
-              setSetting('colorOn', v);
               if (v && img) {
                 const newColors = computeColors(img, settings.nc);
                 const newBands = computeBands(img, settings);
                 useEditorStore.setState({ colors: newColors, bands: newBands });
               }
+              setSetting('colorOn', v);
             }}
           />
           <Note>

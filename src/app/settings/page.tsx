@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
+import AppHeader from "@/components/layout/AppHeader";
 
 export default function SettingsPage() {
   const { isLoaded, isSignedIn } = useUser();
@@ -38,8 +39,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen p-8 max-w-3xl mx-auto">
-      <h1 className="font-heading text-3xl text-ink">Settings</h1>
+    <main className="min-h-screen">
+      <AppHeader />
+
+      <div className="p-8 max-w-3xl mx-auto">
+        <h1 className="font-heading text-3xl text-ink">Settings</h1>
       <p className="mt-2 text-dim font-mono text-sm">
         Account and preferences
       </p>
@@ -153,6 +157,7 @@ export default function SettingsPage() {
           </div>
         )}
       </section>
+      </div>
     </main>
   );
 }

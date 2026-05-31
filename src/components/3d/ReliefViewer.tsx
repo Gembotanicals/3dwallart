@@ -24,6 +24,13 @@ function ReliefMesh() {
     return g;
   }, [geometry, colorData, settings.pw, settings.ph]);
 
+  // Dispose old geometry when it changes or component unmounts
+  useEffect(() => {
+    return () => {
+      bufferGeometry?.dispose();
+    };
+  }, [bufferGeometry]);
+
   if (!bufferGeometry) return null;
 
   return (
@@ -101,7 +108,7 @@ function CameraSetup() {
 
 export default function ReliefViewer() {
   return (
-    <div className="flex-1 min-h-0 relative">
+    <div className="flex-1 min-h-0 relative" id="relief-viewport">
       <Canvas
         gl={{ antialias: true }}
         dpr={[1, 2]}
