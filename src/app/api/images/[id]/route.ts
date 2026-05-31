@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { deleteFile, getSignedUrl } from "@/lib/r2";
+import { deleteFile, getSignedUrl, r2, R2_BUCKET } from "@/lib/r2";
 import { getCurrentUserId } from "@/lib/clerk-helpers";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,52 @@ export async function GET(
 
     if (!image) {
       return NextResponse.json({ error: "Image not found" }, { status: 404 });
+    }
+
+    // If ?download=true, stream the image content directly from R2
+    // This avoids CORS issues with signed URLs
+    const download = request.nextUrl.searchParams.get("download");
+    if (download === "true" && image.url) {
+      const key = image.url.startsWith("http") ? null : image.url;
+      if (key) {
+        try {
+          const response = await r2.send(
+            new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
+          );
+          const body = response.Body;
+          if (body) {
+            // Convert SDK response body to a ReadableStream
+            const chunks: Uint8Array[] = [];
+            if (typeof (body as any)[Symbol.asyncIterator] === 'function') {
+              for await (const chunk of body as AsyncIterable<Uint8Array>) {
+                chunks.push(chunk);
+              }
+            } else if (body instanceof Uint8Array) {
+              chunks.push(body);
+            } else if (typeof body === 'string') {
+              chunks.push(new TextEncoder().encode(body));
+            }
+            const buffer = new Uint8Array(
+              chunks.reduce((acc, c) => acc + c.length, 0)
+            );
+            let offset = 0;
+            for (const chunk of chunks) {
+              buffer.set(chunk, offset);
+              offset += chunk.length;
+            }
+            return new NextResponse(buffer, {
+              headers: {
+                "Content-Type": image.mimeType || "application/octet-stream",
+                "Content-Length": String(buffer.length),
+                "Cache-Control": "private, max-age=3600",
+              },
+            });
+          }
+        } catch (err) {
+          console.error("Failed to stream image from R2:", err);
+          // Fall through to signed URL approach
+        }
+      }
     }
 
     // Generate signed URLs for R2 keys

@@ -194,17 +194,28 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         // If project has an imageId, load the image
         if (project.imageId) {
           try {
+            // First get image metadata
             const imgRes = await fetch(`/api/images/${project.imageId}`);
             if (imgRes.ok) {
               const imageData = await imgRes.json();
-              const im = new Image();
-              im.crossOrigin = 'anonymous';
-              im.onload = () => {
-                if (!cancelled) {
-                  useEditorStore.getState().setImage(im, imageData.originalName);
-                }
-              };
-              im.src = imageData.url;
+              // Fetch image content through our server proxy (?download=true)
+              // This avoids R2 CORS issues entirely — the server fetches from R2
+              // and streams to the browser as same-origin
+              const blobRes = await fetch(`/api/images/${project.imageId}?download=true`);
+              if (blobRes.ok) {
+                const blob = await blobRes.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const im = new Image();
+                im.onload = () => {
+                  if (!cancelled) {
+                    useEditorStore.getState().setImage(im, imageData.originalName);
+                  }
+                };
+                im.onerror = () => {
+                  console.error('Failed to decode project image blob');
+                };
+                im.src = blobUrl;
+              }
             }
           } catch (err) {
             console.error('Failed to load project image:', err);
