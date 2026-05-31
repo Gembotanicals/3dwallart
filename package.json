@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma migrate deploy && prisma generate && next build",
-    "start": "prisma migrate deploy && next start",
+    "build": "prisma generate && next build",
+    "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "worker": "ts-node --esm src/workers/stl-worker.ts"
