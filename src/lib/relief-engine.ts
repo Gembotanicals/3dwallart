@@ -414,6 +414,15 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
     return cy < b.extent * 1.2 && Math.abs(cx - b.center) < b.halfSize;
   });
 
+  // Puzzle tab regions (perimeter wall stops at base height — tab geometry handles above)
+  const puzzleTabs: { edge: 'right' | 'top'; center: number; halfSize: number; extent: number }[] = [];
+  if (usePuzzle && hasR) puzzleTabs.push({ edge: 'right', center: H / 2, halfSize: puzzleSz / 2, extent: puzzleExt });
+  if (usePuzzle && hasU) puzzleTabs.push({ edge: 'top', center: W / 2, halfSize: puzzleSz / 2, extent: puzzleExt });
+  const inPuzzleTab = (cx: number, cy: number) => puzzleTabs.some(b => {
+    if (b.edge === 'right') return cx > W - b.extent * 1.2 && Math.abs(cy - b.center) < b.halfSize;
+    return cy > H - b.extent * 1.2 && Math.abs(cx - b.center) < b.halfSize;
+  });
+
   // top relief
   for (let y = 0; y < ny - 1; y++) {
     for (let x = 0; x < nx - 1; x++) {
@@ -433,6 +442,7 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
   // perimeter relief walls
   for (let x = 0; x < nx - 1; x++) {
     const xa = x * dx, xb = (x + 1) * dx;
+    // Bottom edge (y = 0)
     if (!inNotch((xa + xb) / 2, 0.5)) {
       if (inPuzzleBlank((xa + xb) / 2, 0.5)) {
         q([xa, 0, base], [xb, 0, base], [xb, 0, Z(x + 1, 0)], [xa, 0, Z(x, 0)]);
@@ -440,19 +450,33 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
         q([xa, 0, 0], [xb, 0, 0], [xb, 0, Z(x + 1, 0)], [xa, 0, Z(x, 0)]);
       }
     }
-    q([xb, H, 0], [xa, H, 0], [xa, H, Z(x, ny - 1)], [xb, H, Z(x + 1, ny - 1)]);
+    // Top edge (y = H)
+    if (!inNotch((xa + xb) / 2, H - 0.5)) {
+      if (inPuzzleTab((xa + xb) / 2, H - 0.5)) {
+        q([xb, H, base], [xa, H, base], [xa, H, Z(x, ny - 1)], [xb, H, Z(x + 1, ny - 1)]);
+      } else {
+        q([xb, H, 0], [xa, H, 0], [xa, H, Z(x, ny - 1)], [xb, H, Z(x + 1, ny - 1)]);
+      }
+    }
   }
   for (let y = 0; y < ny - 1; y++) {
     const ya = y * dy, yb = (y + 1) * dy;
+    // Left edge (x = 0)
     if (!inNotch(0.5, (ya + yb) / 2)) {
       if (inPuzzleBlank(0.5, (ya + yb) / 2)) {
-        // In puzzle blank region: only draw wall above base
         q([0, yb, base], [0, ya, base], [0, ya, Z(0, y)], [0, yb, Z(0, y + 1)]);
       } else {
         q([0, yb, 0], [0, ya, 0], [0, ya, Z(0, y)], [0, yb, Z(0, y + 1)]);
       }
     }
-    q([W, ya, 0], [W, yb, 0], [W, yb, Z(nx - 1, y + 1)], [W, ya, Z(nx - 1, y)]);
+    // Right edge (x = W)
+    if (!inNotch(W - 0.5, (ya + yb) / 2)) {
+      if (inPuzzleTab(W - 0.5, (ya + yb) / 2)) {
+        q([W, ya, base], [W, yb, base], [W, yb, Z(nx - 1, y + 1)], [W, ya, Z(nx - 1, y)]);
+      } else {
+        q([W, ya, 0], [W, yb, 0], [W, yb, Z(nx - 1, y + 1)], [W, ya, Z(nx - 1, y)]);
+      }
+    }
   }
   // notch inner walls
   for (const n of notches) {
@@ -469,16 +493,25 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
       reliefTab(V, hg, s.tcol, s.trow + 1, tabX, H, tw, to, dx, dy, (u, v) => [tabX + u, v], s);
     }
   } else {
-    // Puzzle tabs: male on right/top, female on left/bottom
+    // Puzzle edges: classify each edge based on grid position
+    // Right edge: TAB if has right neighbor, FLAT if outer boundary
+    // Left edge: BLANK if has left neighbor, FLAT if outer boundary  
+    // Top edge: TAB if has top neighbor, FLAT if outer boundary
+    // Bottom edge: BLANK if has bottom neighbor, FLAT if outer boundary
+    
+    // Right edge (x = W)
     if (hasR) {
       puzzleTab(V, 'x', W, 0, H, 1, base, puzzleSz, puzzleExt);
     }
-    if (hasU) {
-      puzzleTab(V, 'y', H, 0, W, 1, base, puzzleSz, puzzleExt);
-    }
+    // Left edge (x = 0)
     if (hasL) {
       puzzleBlank(V, 'x', 0, 0, H, 1, base, puzzleSz, puzzleExt);
     }
+    // Top edge (y = H)
+    if (hasU) {
+      puzzleTab(V, 'y', H, 0, W, 1, base, puzzleSz, puzzleExt);
+    }
+    // Bottom edge (y = 0)
     if (hasD) {
       puzzleBlank(V, 'y', 0, 0, W, 1, base, puzzleSz, puzzleExt);
     }
