@@ -82,7 +82,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const settings = project.settings as unknown as ServerReliefSettings;
+    const rawSettings = (project.settings || {}) as Record<string, unknown>;
+    const defaultSettings: ServerReliefSettings = {
+      mapMode: "brightness",
+      invert: false,
+      contrast: 1.15,
+      smooth: 0.6,
+      pw: 150,
+      ph: 150,
+      relief: 3,
+      base: 3,
+      gc: 3,
+      gr: 3,
+      tcol: 1,
+      trow: 1,
+      join: true,
+      tw: 24,
+      to: 6,
+      tc: 0.30,
+      offX: 0.10,
+      offY: 0.18,
+      colorOn: false,
+      nc: 4,
+      bandMode: "height",
+      out: "PANEL",
+      mw: 6,
+      mr: 5,
+      res: 220,
+      puzzleOn: false,
+      puzzleSize: 20,
+      puzzleExtent: 8,
+    };
+    const settings: ServerReliefSettings = { ...defaultSettings, ...rawSettings };
     const cols = gridCols || settings.gc || 1;
     const rows = gridRows || settings.gr || 1;
 

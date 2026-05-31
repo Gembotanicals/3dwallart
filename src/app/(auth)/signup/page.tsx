@@ -13,7 +13,7 @@ export default function SignupPage() {
             card: "bg-transparent shadow-none border-0 p-0",
           },
         }}
-        redirectUrl="/welcome"
+        forceRedirectUrl="/welcome"
       />
     </AuthLayout>
   );

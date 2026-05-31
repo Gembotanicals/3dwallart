@@ -13,7 +13,7 @@ export default function LoginPage() {
             card: "bg-transparent shadow-none border-0 p-0",
           },
         }}
-        redirectUrl="/dashboard"
+        forceRedirectUrl="/dashboard"
       />
     </AuthLayout>
   );
