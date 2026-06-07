@@ -42,7 +42,7 @@ function HUD() {
       {imgName || 'image'} · {settings.gc}×{settings.gr} grid
       <br />
       <b className="text-accent2">{settings.out}</b>
-      {settings.join ? ' · interlocking' : ''}
+      {settings.puzzleOn ? ' · snap-lock' : settings.join ? ' · interlocking' : ''}
       {settings.colorOn ? ` · ${settings.nc} colors` : ''}
       {' · drag/scroll'}
     </div>

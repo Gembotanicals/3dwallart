@@ -3,7 +3,7 @@
 import { useCallback, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useEditorStore } from '@/lib/store';
-import { computeColors, computeBands, m600Text } from '@/lib/relief-engine';
+import { computeColors, computeBands, m600Text, generatePuzzleEdgeMap } from '@/lib/relief-engine';
 
 /* ---- Shared UI primitives ---- */
 
@@ -128,6 +128,7 @@ function Note({ children }: { children: React.ReactNode }) {
 export default function ControlPanel({ projectId }: { projectId?: string }) {
   const settings = useEditorStore((s) => s.settings);
   const setSetting = useEditorStore((s) => s.setSetting);
+  const setSettings = useEditorStore((s) => s.setSettings);
   const setImage = useEditorStore((s) => s.setImage);
   const setTile = useEditorStore((s) => s.setTile);
   const showToast = useEditorStore((s) => s.showToast);
@@ -207,6 +208,25 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
     navigator.clipboard.writeText(text)
       .then(() => showToast('M600 copied'))
       .catch(() => showToast('copy failed'));
+  };
+
+  const edgeMapForGrid = (gc: number, gr: number) => (
+    gc > 1 || gr > 1 ? generatePuzzleEdgeMap(gc, gr) : ''
+  );
+
+  const updateGrid = (gc: number, gr: number) => {
+    const updates: Partial<typeof settings> = {
+      gc,
+      gr,
+      tcol: Math.min(settings.tcol, gc),
+      trow: Math.min(settings.trow, gr),
+    };
+
+    if (settings.puzzleOn) {
+      updates.puzzleEdges = edgeMapForGrid(gc, gr);
+    }
+
+    setSettings(updates);
   };
 
   // Build tile grid
@@ -342,8 +362,7 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
                 max={8}
                 onChange={(e) => {
                   const v = Math.max(1, Math.min(8, parseInt(e.target.value) || 1));
-                  setSetting('gc', v);
-                  if (settings.tcol > v) setSetting('tcol', v);
+                  updateGrid(v, settings.gr);
                 }}
                 className="w-full bg-panel2 border border-line text-ink py-2 px-[9px] rounded-sm font-mono text-[12.5px]"
               />
@@ -357,8 +376,7 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
                 max={8}
                 onChange={(e) => {
                   const v = Math.max(1, Math.min(8, parseInt(e.target.value) || 1));
-                  setSetting('gr', v);
-                  if (settings.trow > v) setSetting('trow', v);
+                  updateGrid(settings.gc, v);
                 }}
                 className="w-full bg-panel2 border border-line text-ink py-2 px-[9px] rounded-sm font-mono text-[12.5px]"
               />
@@ -400,7 +418,7 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
           <Checkbox
             label="Bed-level interlocking edge"
             checked={settings.join}
-            onChange={(v) => setSetting('join', v)}
+            onChange={(v) => setSettings({ join: v, puzzleOn: v ? false : settings.puzzleOn })}
           />
           <Note>
             Tab on right/top edges, notch on left/bottom. Tabs carry the neighboring relief so the artwork fills the joint. Tiles slide together, print flat, and only seat the right way.
@@ -439,23 +457,29 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
         </div>
       </Section>
 
-      {/* PUZZLE TABS */}
+      {/* SNAP-LOCK CLIPS */}
       <Section>
-        <SectionHeader>Puzzle Tabs (Jigsaw)</SectionHeader>
+        <SectionHeader>Snap-Lock Clips</SectionHeader>
         <div className="px-[18px] pb-[18px]">
           <Checkbox
-            label="Jigsaw puzzle edge connectors"
+            label="Square clip/socket connectors"
             checked={settings.puzzleOn}
-            onChange={(v) => setSetting('puzzleOn', v)}
+            onChange={(v) => {
+              setSettings({
+                puzzleOn: v,
+                join: v ? false : settings.join,
+                puzzleEdges: v ? edgeMapForGrid(settings.gc, settings.gr) : settings.puzzleEdges,
+              });
+            }}
           />
           <Note>
-            Curved jigsaw tabs on right/top edges, matching sockets on left/bottom. Tiles interlock like puzzle pieces. Overrides standard joining when enabled.
+            Bed-level clips protrude from one side of each seam and matching sockets are cut into the neighbor with print clearance, like modular wall panels.
           </Note>
 
           {settings.puzzleOn && (
             <>
               <SliderRow
-                label="Tab size"
+                label="Clip width"
                 value={settings.puzzleSize}
                 min={10}
                 max={40}
@@ -465,7 +489,7 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
                 unit="mm"
               />
               <SliderRow
-                label="Tab reach"
+                label="Clip reach"
                 value={settings.puzzleExtent}
                 min={4}
                 max={14}

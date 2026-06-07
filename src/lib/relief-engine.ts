@@ -29,6 +29,7 @@ export interface ReliefSettings {
   puzzleOn: boolean;
   puzzleSize: number;
   puzzleExtent: number;
+  puzzleEdges: string; // JSON string of edge map
 }
 
 export interface HeightGrid {
@@ -53,6 +54,75 @@ export interface BandInfo {
   frac: number;
   z: number;
   layer: number;
+}
+
+// ---- Puzzle Edge Map ----
+
+export interface PuzzleEdgeMap {
+  v: number[]; // vertical seams: (gc-1) * gr, each ±1
+  h: number[]; // horizontal seams: gc * (gr-1), each ±1
+}
+
+function createDefaultPuzzleEdgeMap(gc: number, gr: number): PuzzleEdgeMap {
+  const v: number[] = [];
+  const h: number[] = [];
+
+  for (let c = 0; c < gc - 1; c++) {
+    for (let r = 0; r < gr; r++) {
+      v.push((c + r) % 2 === 0 ? 1 : -1);
+    }
+  }
+
+  for (let r = 0; r < gr - 1; r++) {
+    for (let c = 0; c < gc; c++) {
+      h.push((c + r) % 2 === 0 ? 1 : -1);
+    }
+  }
+
+  return { v, h };
+}
+
+export function generatePuzzleEdgeMap(gc: number, gr: number): string {
+  if (gc < 1 || gr < 1 || (gc === 1 && gr === 1)) return '';
+  const v: number[] = [];
+  const h: number[] = [];
+  
+  // Vertical seams: between columns
+  for (let c = 0; c < gc - 1; c++) {
+    for (let r = 0; r < gr; r++) {
+      v.push(Math.random() < 0.5 ? 1 : -1);
+    }
+  }
+  
+  // Horizontal seams: between rows
+  for (let r = 0; r < gr - 1; r++) {
+    for (let c = 0; c < gc; c++) {
+      h.push(Math.random() < 0.5 ? 1 : -1);
+    }
+  }
+  
+  return JSON.stringify({ v, h });
+}
+
+export function parsePuzzleEdgeMap(json: string, gc: number, gr: number): PuzzleEdgeMap | null {
+  if (!json || gc < 1 || gr < 1 || (gc === 1 && gr === 1)) return null;
+  try {
+    const map = JSON.parse(json);
+    if (!Array.isArray(map.v) || !Array.isArray(map.h)) return null;
+    const expectedV = (gc - 1) * gr;
+    const expectedH = gc * (gr - 1);
+    if (map.v.length !== expectedV || map.h.length !== expectedH) return null;
+    if (!map.v.every((v: unknown) => v === 1 || v === -1)) return null;
+    if (!map.h.every((v: unknown) => v === 1 || v === -1)) return null;
+    return { v: map.v, h: map.h };
+  } catch {
+    return null;
+  }
+}
+
+function getPuzzleEdgeMap(json: string, gc: number, gr: number): PuzzleEdgeMap | null {
+  if (gc < 1 || gr < 1 || (gc === 1 && gr === 1)) return null;
+  return parsePuzzleEdgeMap(json, gc, gr) || createDefaultPuzzleEdgeMap(gc, gr);
 }
 
 // ---- Height grid ----
@@ -239,45 +309,77 @@ function notchWalls(V: number[], n: { x0: number; y0: number; x1: number; y1: nu
 }
 
 
-// ---- Puzzle (jigsaw) tab profile ----
+// ---- Snap-lock clip/socket profile ----
 
-function smoothstep(t: number): number {
-  t = Math.max(0, Math.min(1, t));
-  return t * t * (3 - 2 * t);
+function polygonArea(poly: [number, number][]): number {
+  let area = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const [x1, y1] = poly[i];
+    const [x2, y2] = poly[(i + 1) % poly.length];
+    area += x1 * y2 - x2 * y1;
+  }
+  return area / 2;
 }
 
-function jigsawProfile(edgeLen: number, tabSize: number, extent: number): [number, number][] {
-  const pts: [number, number][] = [];
-  const halfTab = tabSize / 2;
-  const neckFrac = 0.3;
-  const N = 48;
+function pushPrism(V: number[], rawPoly: [number, number][], zTop: number): void {
+  const poly = polygonArea(rawPoly) < 0 ? [...rawPoly].reverse() : rawPoly;
+  const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => pushQuad(V, a, b, c, d);
 
-  for (let i = 0; i <= N; i++) {
-    const t = i / N;
-    const along = halfTab + t * tabSize - halfTab;
-    let offset = 0;
-
-    if (t < 0.1) {
-      const u = t / 0.1;
-      offset = smoothstep(u) * neckFrac * extent;
-    } else if (t < 0.25) {
-      const u = (t - 0.1) / 0.15;
-      offset = (neckFrac + smoothstep(u) * (1 - neckFrac)) * extent;
-    } else if (t < 0.75) {
-      const u = (t - 0.25) / 0.5;
-      const bulge = Math.sin(u * Math.PI) * 0.1;
-      offset = (1 + bulge) * extent;
-    } else if (t < 0.9) {
-      const u = (t - 0.75) / 0.15;
-      offset = (1 - smoothstep(u) * (1 - neckFrac)) * extent;
-    } else {
-      const u = (t - 0.9) / 0.1;
-      offset = (1 - smoothstep(u)) * neckFrac * extent;
-    }
-
-    pts.push([along, offset]);
+  for (let i = 1; i < poly.length - 1; i++) {
+    const a: Vec3 = [poly[0][0], poly[0][1], zTop];
+    const b: Vec3 = [poly[i][0], poly[i][1], zTop];
+    const c: Vec3 = [poly[i + 1][0], poly[i + 1][1], zTop];
+    V.push(...a, ...b, ...c);
   }
-  return pts;
+
+  for (let i = 1; i < poly.length - 1; i++) {
+    const a: Vec3 = [poly[0][0], poly[0][1], 0];
+    const b: Vec3 = [poly[i + 1][0], poly[i + 1][1], 0];
+    const c: Vec3 = [poly[i][0], poly[i][1], 0];
+    V.push(...a, ...b, ...c);
+  }
+
+  for (let i = 0; i < poly.length; i++) {
+    const [x0, y0] = poly[i];
+    const [x1, y1] = poly[(i + 1) % poly.length];
+    q([x0, y0, 0], [x1, y1, 0], [x1, y1, zTop], [x0, y0, zTop]);
+  }
+}
+
+function snapClipPolygon(
+  edgeAxis: 'x' | 'y',
+  edgePos: number,
+  edgeStart: number,
+  edgeEnd: number,
+  dir: number,
+  tabSize: number,
+  extent: number
+): [number, number][] {
+  const edgeLen = Math.max(1, edgeEnd - edgeStart);
+  const center = edgeStart + edgeLen / 2;
+  const half = Math.max(3, Math.min(tabSize, edgeLen * 0.62) / 2);
+  const noseHalf = half * 0.62;
+  const shoulder = extent * 0.38;
+
+  if (edgeAxis === 'x') {
+    return [
+      [edgePos, center - half],
+      [edgePos + dir * shoulder, center - half],
+      [edgePos + dir * extent, center - noseHalf],
+      [edgePos + dir * extent, center + noseHalf],
+      [edgePos + dir * shoulder, center + half],
+      [edgePos, center + half],
+    ];
+  }
+
+  return [
+    [center - half, edgePos],
+    [center - half, edgePos + dir * shoulder],
+    [center - noseHalf, edgePos + dir * extent],
+    [center + noseHalf, edgePos + dir * extent],
+    [center + half, edgePos + dir * shoulder],
+    [center + half, edgePos],
+  ];
 }
 
 function puzzleTab(
@@ -285,48 +387,7 @@ function puzzleTab(
   edgeStart: number, edgeEnd: number, dir: number,
   zTop: number, tabSize: number, extent: number
 ) {
-  const profile = jigsawProfile(edgeEnd - edgeStart, tabSize, extent);
-  const q = (a: number[], b: number[], c: number[], d: number[]) => {
-    V.push(...a, ...b, ...c, ...a, ...c, ...d);
-  };
-
-  for (let i = 0; i < profile.length - 1; i++) {
-    const [a1, o1] = profile[i];
-    const [a2, o2] = profile[i + 1];
-    const y1 = edgeStart + a1;
-    const y2 = edgeStart + a2;
-
-    if (edgeAxis === 'x') {
-      const ex = edgePos;
-      const p1 = ex + dir * o1;
-      const p2 = ex + dir * o2;
-      q([ex, y1, zTop], [ex, y2, zTop], [p2, y2, zTop], [p1, y1, zTop]);
-      q([ex, y1, 0], [p1, y1, 0], [p2, y2, 0], [ex, y2, 0]);
-      q([p1, y1, 0], [p1, y1, zTop], [p2, y2, zTop], [p2, y2, 0]);
-    } else {
-      const ey = edgePos;
-      const p1 = ey + dir * o1;
-      const p2 = ey + dir * o2;
-      q([y1, ey, zTop], [y2, ey, zTop], [y2, p2, zTop], [y1, p1, zTop]);
-      q([y1, ey, 0], [y1, p1, 0], [y2, p2, 0], [y2, ey, 0]);
-      q([y1, p1, 0], [y1, p1, zTop], [y2, p2, zTop], [y2, p2, 0]);
-    }
-  }
-
-  const [fa, fo] = profile[0];
-  const [la, lo] = profile[profile.length - 1];
-  const fy = edgeStart + fa;
-  const ly = edgeStart + la;
-
-  if (edgeAxis === 'x') {
-    const ex = edgePos;
-    q([ex, fy, 0], [ex, fy, zTop], [ex + dir * fo, fy, zTop], [ex + dir * fo, fy, 0]);
-    q([ex, ly, 0], [ex + dir * lo, ly, 0], [ex + dir * lo, ly, zTop], [ex, ly, zTop]);
-  } else {
-    const ey = edgePos;
-    q([fy, ey, 0], [fy, ey + dir * fo, 0], [fy, ey + dir * fo, zTop], [fy, ey, zTop]);
-    q([ly, ey, 0], [ly, ey, zTop], [ly, ey + dir * lo, zTop], [ly, ey + dir * lo, 0]);
-  }
+  pushPrism(V, snapClipPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent), zTop);
 }
 
 function puzzleBlank(
@@ -334,45 +395,22 @@ function puzzleBlank(
   edgeStart: number, edgeEnd: number, dir: number,
   zTop: number, tabSize: number, extent: number
 ) {
-  const profile = jigsawProfile(edgeEnd - edgeStart, tabSize, extent);
-  const q = (a: number[], b: number[], c: number[], d: number[]) => {
-    V.push(...a, ...b, ...c, ...a, ...c, ...d);
-  };
-
-  for (let i = 0; i < profile.length - 1; i++) {
-    const [a1, o1] = profile[i];
-    const [a2, o2] = profile[i + 1];
-    const y1 = edgeStart + a1;
-    const y2 = edgeStart + a2;
-
-    if (edgeAxis === 'x') {
-      const ex = edgePos;
-      const p1 = ex + dir * o1;
-      const p2 = ex + dir * o2;
-      q([ex, y1, zTop], [p1, y1, zTop], [p2, y2, zTop], [ex, y2, zTop]);
-      q([p1, y1, 0], [p2, y2, 0], [p2, y2, zTop], [p1, y1, zTop]);
-    } else {
-      const ey = edgePos;
-      const p1 = ey + dir * o1;
-      const p2 = ey + dir * o2;
-      q([y1, ey, zTop], [y1, p1, zTop], [y2, p2, zTop], [y2, ey, zTop]);
-      q([y1, p1, 0], [y1, p1, zTop], [y2, p2, zTop], [y2, p2, 0]);
-    }
-  }
-
-  const [fa, fo] = profile[0];
-  const [la, lo] = profile[profile.length - 1];
-  const fy = edgeStart + fa;
-  const ly = edgeStart + la;
+  const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => pushQuad(V, a, b, c, d);
+  const edgeLen = Math.max(1, edgeEnd - edgeStart);
+  const center = edgeStart + edgeLen / 2;
+  const half = Math.max(3, Math.min(tabSize, edgeLen * 0.68) / 2);
+  const a0 = center - half;
+  const a1 = center + half;
+  const back = edgePos + dir * extent;
 
   if (edgeAxis === 'x') {
-    const ex = edgePos;
-    q([ex, fy, 0], [ex + dir * fo, fy, 0], [ex + dir * fo, fy, zTop], [ex, fy, zTop]);
-    q([ex, ly, 0], [ex, ly, zTop], [ex + dir * lo, ly, zTop], [ex + dir * lo, ly, 0]);
+    q([edgePos, a0, 0], [back, a0, 0], [back, a0, zTop], [edgePos, a0, zTop]);
+    q([back, a1, 0], [edgePos, a1, 0], [edgePos, a1, zTop], [back, a1, zTop]);
+    q([back, a0, 0], [back, a1, 0], [back, a1, zTop], [back, a0, zTop]);
   } else {
-    const ey = edgePos;
-    q([fy, ey, 0], [fy, ey, zTop], [fy, ey + dir * lo, zTop], [fy, ey + dir * lo, 0]);
-    q([ly, ey, 0], [ly, ey + dir * lo, 0], [ly, ey + dir * lo, zTop], [ly, ey, zTop]);
+    q([a0, edgePos, 0], [a0, back, 0], [a0, back, zTop], [a0, edgePos, zTop]);
+    q([a1, back, 0], [a1, edgePos, 0], [a1, edgePos, zTop], [a1, back, zTop]);
+    q([a0, back, 0], [a1, back, 0], [a1, back, zTop], [a0, back, zTop]);
   }
 }
 
@@ -399,35 +437,88 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
   const usePuzzle = s.puzzleOn;
   const puzzleSz = s.puzzleSize;
   const puzzleExt = s.puzzleExtent;
+  
+  // Parse edge map for snap-lock mode; fall back to a deterministic map for older projects.
+  const edgeMap = usePuzzle ? getPuzzleEdgeMap(s.puzzleEdges, s.gc, s.gr) : null;
+  const col = s.tcol - 1; // 0-indexed
+  const row = s.trow - 1; // 0-indexed
+  
+  // Determine edge types for this tile
+  // Returns: 'tab' | 'blank' | 'flat', and direction (+1 or -1)
+  const getEdgeType = (edge: 'right' | 'left' | 'top' | 'bottom'): { type: 'tab' | 'blank' | 'flat'; dir: number } => {
+    if (!edgeMap) return { type: 'flat', dir: 1 };
+    
+    if (edge === 'right') {
+      if (!hasR) return { type: 'flat', dir: 1 };
+      const seam = edgeMap.v[col * s.gr + row];
+      return { type: seam === 1 ? 'tab' : 'blank', dir: seam };
+    }
+    if (edge === 'left') {
+      if (!hasL) return { type: 'flat', dir: 1 };
+      const seam = edgeMap.v[(col - 1) * s.gr + row];
+      return { type: seam === 1 ? 'blank' : 'tab', dir: seam };
+    }
+    if (edge === 'top') {
+      if (!hasU) return { type: 'flat', dir: 1 };
+      const seam = edgeMap.h[row * s.gc + col];
+      return { type: seam === 1 ? 'tab' : 'blank', dir: seam };
+    }
+    if (edge === 'bottom') {
+      if (!hasD) return { type: 'flat', dir: 1 };
+      const seam = edgeMap.h[(row - 1) * s.gc + col];
+      return { type: seam === 1 ? 'blank' : 'tab', dir: seam };
+    }
+    return { type: 'flat', dir: 1 };
+  };
+  
+  const rightEdge = getEdgeType('right');
+  const leftEdge = getEdgeType('left');
+  const topEdge = getEdgeType('top');
+  const bottomEdge = getEdgeType('bottom');
 
   const notches: { x0: number; y0: number; x1: number; y1: number }[] = [];
   if (s.join && !usePuzzle && hasL) notches.push({ x0: -1, y0: H / 2 + oy - (tw + 2 * clr) / 2, x1: to + clr, y1: H / 2 + oy + (tw + 2 * clr) / 2 });
   if (s.join && !usePuzzle && hasD) notches.push({ x0: W / 2 + ox - (tw + 2 * clr) / 2, y0: -1, x1: W / 2 + ox + (tw + 2 * clr) / 2, y1: to + clr });
   const inNotch = (cx: number, cy: number) => notches.some(n => cx > n.x0 && cx < n.x1 && cy > n.y0 && cy < n.y1);
 
-  // Puzzle blank regions (for skipping perimeter walls)
-  const puzzleBlanks: { edge: 'left' | 'bottom'; center: number; halfSize: number; extent: number }[] = [];
-  if (usePuzzle && hasL) puzzleBlanks.push({ edge: 'left', center: H / 2, halfSize: puzzleSz / 2, extent: puzzleExt });
-  if (usePuzzle && hasD) puzzleBlanks.push({ edge: 'bottom', center: W / 2, halfSize: puzzleSz / 2, extent: puzzleExt });
-  const inPuzzleBlank = (cx: number, cy: number) => puzzleBlanks.some(b => {
-    if (b.edge === 'left') return cx < b.extent * 1.2 && Math.abs(cy - b.center) < b.halfSize;
-    return cy < b.extent * 1.2 && Math.abs(cx - b.center) < b.halfSize;
+  const snapSockets: { edge: 'left' | 'bottom' | 'right' | 'top'; center: number; halfSize: number; depth: number }[] = [];
+  const snapTabs: { edge: 'left' | 'bottom' | 'right' | 'top'; center: number; halfSize: number; depth: number }[] = [];
+  const socketHalfX = Math.min((puzzleSz + 2 * clr) / 2, Math.max(3, W * 0.34));
+  const socketHalfY = Math.min((puzzleSz + 2 * clr) / 2, Math.max(3, H * 0.34));
+  const tabHalfX = Math.min(puzzleSz / 2, Math.max(3, W * 0.31));
+  const tabHalfY = Math.min(puzzleSz / 2, Math.max(3, H * 0.31));
+  const socketDepth = puzzleExt + clr;
+
+  if (usePuzzle) {
+    if (rightEdge.type === 'tab') snapTabs.push({ edge: 'right', center: H / 2, halfSize: tabHalfY, depth: puzzleExt });
+    if (rightEdge.type === 'blank') snapSockets.push({ edge: 'right', center: H / 2, halfSize: socketHalfY, depth: socketDepth });
+    if (leftEdge.type === 'tab') snapTabs.push({ edge: 'left', center: H / 2, halfSize: tabHalfY, depth: puzzleExt });
+    if (leftEdge.type === 'blank') snapSockets.push({ edge: 'left', center: H / 2, halfSize: socketHalfY, depth: socketDepth });
+    if (topEdge.type === 'tab') snapTabs.push({ edge: 'top', center: W / 2, halfSize: tabHalfX, depth: puzzleExt });
+    if (topEdge.type === 'blank') snapSockets.push({ edge: 'top', center: W / 2, halfSize: socketHalfX, depth: socketDepth });
+    if (bottomEdge.type === 'tab') snapTabs.push({ edge: 'bottom', center: W / 2, halfSize: tabHalfX, depth: puzzleExt });
+    if (bottomEdge.type === 'blank') snapSockets.push({ edge: 'bottom', center: W / 2, halfSize: socketHalfX, depth: socketDepth });
+  }
+
+  const inSnapSocket = (cx: number, cy: number) => snapSockets.some((socket) => {
+    if (socket.edge === 'left') return cx <= socket.depth && Math.abs(cy - socket.center) <= socket.halfSize;
+    if (socket.edge === 'right') return cx >= W - socket.depth && Math.abs(cy - socket.center) <= socket.halfSize;
+    if (socket.edge === 'bottom') return cy <= socket.depth && Math.abs(cx - socket.center) <= socket.halfSize;
+    return cy >= H - socket.depth && Math.abs(cx - socket.center) <= socket.halfSize;
   });
 
-  // Puzzle tab regions (perimeter wall stops at base height — tab geometry handles above)
-  const puzzleTabs: { edge: 'right' | 'top'; center: number; halfSize: number; extent: number }[] = [];
-  if (usePuzzle && hasR) puzzleTabs.push({ edge: 'right', center: H / 2, halfSize: puzzleSz / 2, extent: puzzleExt });
-  if (usePuzzle && hasU) puzzleTabs.push({ edge: 'top', center: W / 2, halfSize: puzzleSz / 2, extent: puzzleExt });
-  const inPuzzleTab = (cx: number, cy: number) => puzzleTabs.some(b => {
-    if (b.edge === 'right') return cx > W - b.extent * 1.2 && Math.abs(cy - b.center) < b.halfSize;
-    return cy > H - b.extent * 1.2 && Math.abs(cx - b.center) < b.halfSize;
+  const inSnapTab = (cx: number, cy: number) => snapTabs.some((tab) => {
+    if (tab.edge === 'left') return cx <= Math.max(1, tab.depth) && Math.abs(cy - tab.center) <= tab.halfSize;
+    if (tab.edge === 'right') return cx >= W - Math.max(1, tab.depth) && Math.abs(cy - tab.center) <= tab.halfSize;
+    if (tab.edge === 'bottom') return cy <= Math.max(1, tab.depth) && Math.abs(cx - tab.center) <= tab.halfSize;
+    return cy >= H - Math.max(1, tab.depth) && Math.abs(cx - tab.center) <= tab.halfSize;
   });
 
   // top relief
   for (let y = 0; y < ny - 1; y++) {
     for (let x = 0; x < nx - 1; x++) {
       const x0 = x * dx, x1 = (x + 1) * dx, y0 = y * dy, y1 = (y + 1) * dy;
-      if (inNotch((x0 + x1) / 2, (y0 + y1) / 2)) continue;
+      if (inNotch((x0 + x1) / 2, (y0 + y1) / 2) || inSnapSocket((x0 + x1) / 2, (y0 + y1) / 2)) continue;
       q([x0, y0, Z(x, y)], [x1, y0, Z(x + 1, y)], [x1, y1, Z(x + 1, y + 1)], [x0, y1, Z(x, y + 1)]);
     }
   }
@@ -435,7 +526,7 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
   for (let y = 0; y < ny - 1; y++) {
     for (let x = 0; x < nx - 1; x++) {
       const x0 = x * dx, x1 = (x + 1) * dx, y0 = y * dy, y1 = (y + 1) * dy;
-      if (inNotch((x0 + x1) / 2, (y0 + y1) / 2)) continue;
+      if (inNotch((x0 + x1) / 2, (y0 + y1) / 2) || inSnapSocket((x0 + x1) / 2, (y0 + y1) / 2)) continue;
       q([x0, y0, 0], [x0, y1, 0], [x1, y1, 0], [x1, y0, 0]);
     }
   }
@@ -443,39 +534,27 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
   for (let x = 0; x < nx - 1; x++) {
     const xa = x * dx, xb = (x + 1) * dx;
     // Bottom edge (y = 0)
-    if (!inNotch((xa + xb) / 2, 0.5)) {
-      if (inPuzzleBlank((xa + xb) / 2, 0.5)) {
-        q([xa, 0, base], [xb, 0, base], [xb, 0, Z(x + 1, 0)], [xa, 0, Z(x, 0)]);
-      } else {
-        q([xa, 0, 0], [xb, 0, 0], [xb, 0, Z(x + 1, 0)], [xa, 0, Z(x, 0)]);
-      }
+    if (!inNotch((xa + xb) / 2, 0.5) && !inSnapSocket((xa + xb) / 2, 0.5)) {
+      const z0 = inSnapTab((xa + xb) / 2, 0.5) ? base : 0;
+      q([xa, 0, z0], [xb, 0, z0], [xb, 0, Z(x + 1, 0)], [xa, 0, Z(x, 0)]);
     }
     // Top edge (y = H)
-    if (!inNotch((xa + xb) / 2, H - 0.5)) {
-      if (inPuzzleTab((xa + xb) / 2, H - 0.5)) {
-        q([xb, H, base], [xa, H, base], [xa, H, Z(x, ny - 1)], [xb, H, Z(x + 1, ny - 1)]);
-      } else {
-        q([xb, H, 0], [xa, H, 0], [xa, H, Z(x, ny - 1)], [xb, H, Z(x + 1, ny - 1)]);
-      }
+    if (!inNotch((xa + xb) / 2, H - 0.5) && !inSnapSocket((xa + xb) / 2, H - 0.5)) {
+      const z0 = inSnapTab((xa + xb) / 2, H - 0.5) ? base : 0;
+      q([xb, H, z0], [xa, H, z0], [xa, H, Z(x, ny - 1)], [xb, H, Z(x + 1, ny - 1)]);
     }
   }
   for (let y = 0; y < ny - 1; y++) {
     const ya = y * dy, yb = (y + 1) * dy;
     // Left edge (x = 0)
-    if (!inNotch(0.5, (ya + yb) / 2)) {
-      if (inPuzzleBlank(0.5, (ya + yb) / 2)) {
-        q([0, yb, base], [0, ya, base], [0, ya, Z(0, y)], [0, yb, Z(0, y + 1)]);
-      } else {
-        q([0, yb, 0], [0, ya, 0], [0, ya, Z(0, y)], [0, yb, Z(0, y + 1)]);
-      }
+    if (!inNotch(0.5, (ya + yb) / 2) && !inSnapSocket(0.5, (ya + yb) / 2)) {
+      const z0 = inSnapTab(0.5, (ya + yb) / 2) ? base : 0;
+      q([0, yb, z0], [0, ya, z0], [0, ya, Z(0, y)], [0, yb, Z(0, y + 1)]);
     }
     // Right edge (x = W)
-    if (!inNotch(W - 0.5, (ya + yb) / 2)) {
-      if (inPuzzleTab(W - 0.5, (ya + yb) / 2)) {
-        q([W, ya, base], [W, yb, base], [W, yb, Z(nx - 1, y + 1)], [W, ya, Z(nx - 1, y)]);
-      } else {
-        q([W, ya, 0], [W, yb, 0], [W, yb, Z(nx - 1, y + 1)], [W, ya, Z(nx - 1, y)]);
-      }
+    if (!inNotch(W - 0.5, (ya + yb) / 2) && !inSnapSocket(W - 0.5, (ya + yb) / 2)) {
+      const z0 = inSnapTab(W - 0.5, (ya + yb) / 2) ? base : 0;
+      q([W, ya, z0], [W, yb, z0], [W, yb, Z(nx - 1, y + 1)], [W, ya, Z(nx - 1, y)]);
     }
   }
   // notch inner walls
@@ -493,32 +572,44 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
       reliefTab(V, hg, s.tcol, s.trow + 1, tabX, H, tw, to, dx, dy, (u, v) => [tabX + u, v], s);
     }
   } else {
-    // Puzzle edges: classify each edge based on grid position
-    // Right edge: TAB if has right neighbor, FLAT if outer boundary
-    // Left edge: BLANK if has left neighbor, FLAT if outer boundary  
-    // Top edge: TAB if has top neighbor, FLAT if outer boundary
-    // Bottom edge: BLANK if has bottom neighbor, FLAT if outer boundary
+    // Snap-lock edges: tab protrudes at bed height, blank cuts a matching through-socket.
+    const tabZ = base;
+    const socketZ = base + relief;
+    const socketWidth = puzzleSz + 2 * clr;
+    const socketReach = puzzleExt + clr;
     
     // Right edge (x = W)
-    if (hasR) {
-      puzzleTab(V, 'x', W, 0, H, 1, base, puzzleSz, puzzleExt);
+    if (rightEdge.type === 'tab') {
+      puzzleTab(V, 'x', W, 0, H, rightEdge.dir, tabZ, puzzleSz, puzzleExt);
+    } else if (rightEdge.type === 'blank') {
+      puzzleBlank(V, 'x', W, 0, H, rightEdge.dir, socketZ, socketWidth, socketReach);
     }
     // Left edge (x = 0)
-    if (hasL) {
-      puzzleBlank(V, 'x', 0, 0, H, 1, base, puzzleSz, puzzleExt);
+    if (leftEdge.type === 'tab') {
+      puzzleTab(V, 'x', 0, 0, H, leftEdge.dir, tabZ, puzzleSz, puzzleExt);
+    } else if (leftEdge.type === 'blank') {
+      puzzleBlank(V, 'x', 0, 0, H, leftEdge.dir, socketZ, socketWidth, socketReach);
     }
     // Top edge (y = H)
-    if (hasU) {
-      puzzleTab(V, 'y', H, 0, W, 1, base, puzzleSz, puzzleExt);
+    if (topEdge.type === 'tab') {
+      puzzleTab(V, 'y', H, 0, W, topEdge.dir, tabZ, puzzleSz, puzzleExt);
+    } else if (topEdge.type === 'blank') {
+      puzzleBlank(V, 'y', H, 0, W, topEdge.dir, socketZ, socketWidth, socketReach);
     }
     // Bottom edge (y = 0)
-    if (hasD) {
-      puzzleBlank(V, 'y', 0, 0, W, 1, base, puzzleSz, puzzleExt);
+    if (bottomEdge.type === 'tab') {
+      puzzleTab(V, 'y', 0, 0, W, bottomEdge.dir, tabZ, puzzleSz, puzzleExt);
+    } else if (bottomEdge.type === 'blank') {
+      puzzleBlank(V, 'y', 0, 0, W, bottomEdge.dir, socketZ, socketWidth, socketReach);
     }
   }
 
-  const bboxW = usePuzzle ? (hasR ? W + puzzleExt : W) : (hasR ? W + to : W);
-  const bboxH = usePuzzle ? (hasU ? H + puzzleExt : H) : (hasU ? H + to : H);
+  const bboxW = usePuzzle
+    ? W + (rightEdge.type === 'tab' ? puzzleExt : 0) + (leftEdge.type === 'tab' ? puzzleExt : 0)
+    : (hasR ? W + to : W);
+  const bboxH = usePuzzle
+    ? H + (topEdge.type === 'tab' ? puzzleExt : 0) + (bottomEdge.type === 'tab' ? puzzleExt : 0)
+    : (hasU ? H + to : H);
 
   return {
     array: new Float32Array(V),

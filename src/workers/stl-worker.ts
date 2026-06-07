@@ -85,9 +85,9 @@ async function processExportJob(job: Job<ExportJobData>): Promise<void> {
 
   // Build geometry
   const geo =
-    settings.out === "MOLD"
-      ? buildMoldGeometryServer(hg, settings)
-      : buildGeometryServer(hg, settings);
+    settingsWithRes.out === "MOLD"
+      ? buildMoldGeometryServer(hg, settingsWithRes)
+      : buildGeometryServer(hg, settingsWithRes);
   if (!geo) {
     throw new Error("Failed to build geometry");
   }

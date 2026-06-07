@@ -424,7 +424,7 @@ function SharedViewer({ data, token }: { data: ShareData; token: string }) {
             {settings.gc}×{settings.gr} grid · {settings.pw}×{settings.ph}mm tiles
             <br />
             <span className="text-accent2 font-bold">{viewMode}</span>
-            {settings.join ? ' · interlocking' : ''}
+            {settings.puzzleOn ? ' · snap-lock' : settings.join ? ' · interlocking' : ''}
             {settings.colorOn ? ` · ${settings.nc} colors` : ''}
           </div>
           <div className="mt-3 flex items-center gap-2">

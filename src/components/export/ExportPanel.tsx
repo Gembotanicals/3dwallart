@@ -152,6 +152,7 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
           projectId,
           format,
           resolution,
+          settings,
           imageDataUrl,
         }),
       });
@@ -208,6 +209,7 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
           projectId,
           format,
           resolution,
+          settings,
           gridCols: settings.gc,
           gridRows: settings.gr,
           imageDataUrl,

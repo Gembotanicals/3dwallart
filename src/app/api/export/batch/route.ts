@@ -82,7 +82,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const rawSettings = (project.settings || {}) as Record<string, unknown>;
+    const savedSettings = (project.settings || {}) as Record<string, unknown>;
+    const requestSettings =
+      body.settings && typeof body.settings === "object" && !Array.isArray(body.settings)
+        ? (body.settings as Record<string, unknown>)
+        : {};
+    const rawSettings = { ...savedSettings, ...requestSettings };
     const defaultSettings: ServerReliefSettings = {
       mapMode: "brightness",
       invert: false,
@@ -112,6 +117,7 @@ export async function POST(req: NextRequest) {
       puzzleOn: false,
       puzzleSize: 20,
       puzzleExtent: 8,
+      puzzleEdges: "",
     };
     const settings: ServerReliefSettings = { ...defaultSettings, ...rawSettings };
     const cols = gridCols || settings.gc || 1;
