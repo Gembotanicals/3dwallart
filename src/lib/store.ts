@@ -42,6 +42,7 @@ export const DEFAULT_SETTINGS: ReliefSettings = {
   puzzleOn: false,
   puzzleSize: 20,
   puzzleExtent: 8,
+  puzzleHeadDepth: 4.5,
   puzzleEdges: '',
 };
 

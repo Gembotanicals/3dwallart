@@ -32,6 +32,7 @@ export interface ServerReliefSettings {
   puzzleOn: boolean;
   puzzleSize: number;
   puzzleExtent: number;
+  puzzleHeadDepth: number;
   puzzleEdges: string; // JSON string of edge map
 }
 
@@ -439,6 +440,15 @@ function puzzleClickMouthHalf(tabSize: number, edgeLen: number): number {
   return Math.max(2.4, bulbHalf * 0.48);
 }
 
+function resolvePuzzleHeadDepth(headDepth: number | undefined, extent: number): number {
+  const reach = Math.max(1, extent);
+  const fallback = reach * 0.42;
+  const value = typeof headDepth === 'number' && Number.isFinite(headDepth)
+    ? headDepth
+    : fallback;
+  return Math.max(1.5, Math.min(value, Math.max(1.5, reach - 1.1)));
+}
+
 function cubicPoint(
   p0: [number, number],
   c1: [number, number],
@@ -466,19 +476,23 @@ function pushBezier(
   }
 }
 
-function puzzleClickProfileLocal(tabSize: number, edgeLen: number, extent: number): [number, number][] {
+function puzzleClickProfileLocal(tabSize: number, edgeLen: number, extent: number, headDepth?: number): [number, number][] {
   const bulbHalf = Math.max(4, Math.min(tabSize, edgeLen * 0.68) / 2);
   const neckHalf = puzzleClickMouthHalf(tabSize, edgeLen);
   const reach = Math.max(1, extent);
-  const neckDepth = Math.max(1, Math.min(reach * 0.34, reach - 0.7));
-  const headDepth = neckDepth + (reach - neckDepth) * 0.45;
-  const handle = Math.max(0.8, reach * 0.18);
+  const resolvedHeadDepth = resolvePuzzleHeadDepth(headDepth, reach);
+  const headStart = Math.max(1.2, reach - resolvedHeadDepth);
+  const neckDepth = Math.max(0.9, Math.min(reach * 0.3, headStart - 0.35));
+  const shoulderSpan = Math.max(0.45, headStart - neckDepth);
+  const headSpan = Math.max(0.45, reach - headStart);
+  const shoulderHandle = Math.max(0.35, Math.min(reach * 0.16, shoulderSpan * 0.45));
+  const headHandle = Math.max(0.35, Math.min(reach * 0.18, headSpan * 0.46));
   const points: [number, number][] = [[0, -neckHalf], [neckDepth, -neckHalf]];
 
-  pushBezier(points, [neckDepth, -neckHalf], [neckDepth + handle, -neckHalf], [headDepth - handle, -bulbHalf], [headDepth, -bulbHalf], 6);
-  pushBezier(points, [headDepth, -bulbHalf], [reach - handle, -bulbHalf], [reach, -bulbHalf * 0.42], [reach, 0], 6);
-  pushBezier(points, [reach, 0], [reach, bulbHalf * 0.42], [reach - handle, bulbHalf], [headDepth, bulbHalf], 6);
-  pushBezier(points, [headDepth, bulbHalf], [headDepth - handle, bulbHalf], [neckDepth + handle, neckHalf], [neckDepth, neckHalf], 6);
+  pushBezier(points, [neckDepth, -neckHalf], [neckDepth + shoulderHandle, -neckHalf], [headStart - shoulderHandle, -bulbHalf], [headStart, -bulbHalf], 6);
+  pushBezier(points, [headStart, -bulbHalf], [reach - headHandle, -bulbHalf], [reach, -bulbHalf * 0.42], [reach, 0], 6);
+  pushBezier(points, [reach, 0], [reach, bulbHalf * 0.42], [reach - headHandle, bulbHalf], [headStart, bulbHalf], 6);
+  pushBezier(points, [headStart, bulbHalf], [headStart - shoulderHandle, bulbHalf], [neckDepth + shoulderHandle, neckHalf], [neckDepth, neckHalf], 6);
   points.push([0, neckHalf]);
   return points;
 }
@@ -503,11 +517,12 @@ function puzzleClickPolygon(
   edgeEnd: number,
   dir: number,
   tabSize: number,
-  extent: number
+  extent: number,
+  headDepth?: number
 ): [number, number][] {
   const edgeLen = Math.max(1, edgeEnd - edgeStart);
   const center = edgeStart + edgeLen / 2;
-  return puzzleClickProfileLocal(tabSize, edgeLen, extent).map(([normal, along]) => {
+  return puzzleClickProfileLocal(tabSize, edgeLen, extent, headDepth).map(([normal, along]) => {
     const x = edgeAxis === 'x' ? edgePos + dir * normal : center + along;
     const y = edgeAxis === 'x' ? center + along : edgePos + dir * normal;
     return [x, y];
@@ -517,18 +532,18 @@ function puzzleClickPolygon(
 function puzzleTab(
   V: number[], edgeAxis: 'x' | 'y', edgePos: number,
   edgeStart: number, edgeEnd: number, dir: number,
-  zTop: number, tabSize: number, extent: number
+  zTop: number, tabSize: number, extent: number, headDepth?: number
 ) {
-  pushPrism(V, puzzleClickPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent), zTop);
+  pushPrism(V, puzzleClickPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent, headDepth), zTop);
 }
 
 function puzzleBlank(
   V: number[], edgeAxis: 'x' | 'y', edgePos: number,
   edgeStart: number, edgeEnd: number, dir: number,
-  zTop: number, tabSize: number, extent: number
+  zTop: number, tabSize: number, extent: number, headDepth?: number
 ) {
   const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => pushQuad(V, a, b, c, d);
-  const poly = puzzleClickPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent);
+  const poly = puzzleClickPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent, headDepth);
 
   for (let i = 0; i < poly.length - 1; i++) {
     const [x0, y0] = poly[i];
@@ -567,6 +582,7 @@ export function buildGeometryServer(
   const usePuzzle = s.puzzleOn;
   const puzzleSz = s.puzzleSize;
   const puzzleExt = s.puzzleExtent;
+  const puzzleHeadDepth = resolvePuzzleHeadDepth(s.puzzleHeadDepth, puzzleExt);
   
   // Parse edge map for snap-lock mode; fall back to a deterministic map for older projects.
   const edgeMap = usePuzzle ? getPuzzleEdgeMap(s.puzzleEdges, s.gc, s.gr) : null;
@@ -632,8 +648,9 @@ export function buildGeometryServer(
   const tabHalfX = puzzleClickMouthHalf(puzzleSz, W);
   const tabHalfY = puzzleClickMouthHalf(puzzleSz, H);
   const socketDepth = puzzleExt + clr;
-  const socketProfileX = puzzleClickProfileLocal(socketHalfX * 2, W, socketDepth);
-  const socketProfileY = puzzleClickProfileLocal(socketHalfY * 2, H, socketDepth);
+  const socketHeadDepth = puzzleHeadDepth + clr;
+  const socketProfileX = puzzleClickProfileLocal(socketHalfX * 2, W, socketDepth, socketHeadDepth);
+  const socketProfileY = puzzleClickProfileLocal(socketHalfY * 2, H, socketDepth, socketHeadDepth);
 
   if (usePuzzle) {
     if (rightEdge.type === 'tab') snapTabs.push({ edge: 'right', center: H / 2, halfSize: tabHalfY, depth: puzzleExt });
@@ -766,30 +783,31 @@ export function buildGeometryServer(
     const socketZ = base + relief;
     const socketWidth = puzzleSz + 2 * clr;
     const socketReach = puzzleExt + clr;
+    const socketHeadDepth = puzzleHeadDepth + clr;
     
     // Right edge (x = W)
     if (rightEdge.type === 'tab') {
-      puzzleTab(V, 'x', W, 0, H, rightEdge.dir, tabZ, puzzleSz, puzzleExt);
+      puzzleTab(V, 'x', W, 0, H, rightEdge.dir, tabZ, puzzleSz, puzzleExt, puzzleHeadDepth);
     } else if (rightEdge.type === 'blank') {
-      puzzleBlank(V, 'x', W, 0, H, rightEdge.dir, socketZ, socketWidth, socketReach);
+      puzzleBlank(V, 'x', W, 0, H, rightEdge.dir, socketZ, socketWidth, socketReach, socketHeadDepth);
     }
     // Left edge (x = 0)
     if (leftEdge.type === 'tab') {
-      puzzleTab(V, 'x', 0, 0, H, leftEdge.dir, tabZ, puzzleSz, puzzleExt);
+      puzzleTab(V, 'x', 0, 0, H, leftEdge.dir, tabZ, puzzleSz, puzzleExt, puzzleHeadDepth);
     } else if (leftEdge.type === 'blank') {
-      puzzleBlank(V, 'x', 0, 0, H, leftEdge.dir, socketZ, socketWidth, socketReach);
+      puzzleBlank(V, 'x', 0, 0, H, leftEdge.dir, socketZ, socketWidth, socketReach, socketHeadDepth);
     }
     // Top edge (y = H)
     if (topEdge.type === 'tab') {
-      puzzleTab(V, 'y', H, 0, W, topEdge.dir, tabZ, puzzleSz, puzzleExt);
+      puzzleTab(V, 'y', H, 0, W, topEdge.dir, tabZ, puzzleSz, puzzleExt, puzzleHeadDepth);
     } else if (topEdge.type === 'blank') {
-      puzzleBlank(V, 'y', H, 0, W, topEdge.dir, socketZ, socketWidth, socketReach);
+      puzzleBlank(V, 'y', H, 0, W, topEdge.dir, socketZ, socketWidth, socketReach, socketHeadDepth);
     }
     // Bottom edge (y = 0)
     if (bottomEdge.type === 'tab') {
-      puzzleTab(V, 'y', 0, 0, W, bottomEdge.dir, tabZ, puzzleSz, puzzleExt);
+      puzzleTab(V, 'y', 0, 0, W, bottomEdge.dir, tabZ, puzzleSz, puzzleExt, puzzleHeadDepth);
     } else if (bottomEdge.type === 'blank') {
-      puzzleBlank(V, 'y', 0, 0, W, bottomEdge.dir, socketZ, socketWidth, socketReach);
+      puzzleBlank(V, 'y', 0, 0, W, bottomEdge.dir, socketZ, socketWidth, socketReach, socketHeadDepth);
     }
   }
 

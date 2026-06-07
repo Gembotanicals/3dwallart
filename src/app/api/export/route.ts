@@ -134,6 +134,7 @@ export async function POST(req: NextRequest) {
       puzzleOn: false,
       puzzleSize: 20,
       puzzleExtent: 8,
+      puzzleHeadDepth: 4.5,
       puzzleEdges: "",
     };
     const settings: ServerReliefSettings = { ...defaultSettings, ...rawSettings };

@@ -221,6 +221,9 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
     : settings.join
       ? 'slide'
       : 'off';
+  const snapHeadDepthMaxFor = (tabDepth: number) => Math.max(2, Math.min(12, tabDepth - 0.8));
+  const snapHeadDepthMax = snapHeadDepthMaxFor(settings.puzzleExtent);
+  const snapHeadDepthValue = Math.min(settings.puzzleHeadDepth, snapHeadDepthMax);
 
   const setConnectorMode = (mode: ConnectorMode) => {
     setSettings({
@@ -506,7 +509,20 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
                 min={4}
                 max={14}
                 step={0.5}
-                onChange={(v) => setSetting('puzzleExtent', v)}
+                onChange={(v) => setSettings({
+                  puzzleExtent: v,
+                  puzzleHeadDepth: Math.min(settings.puzzleHeadDepth, snapHeadDepthMaxFor(v)),
+                })}
+                format={(v) => v.toFixed(1)}
+                unit="mm"
+              />
+              <SliderRow
+                label="Tab head depth"
+                value={snapHeadDepthValue}
+                min={1.5}
+                max={snapHeadDepthMax}
+                step={0.5}
+                onChange={(v) => setSetting('puzzleHeadDepth', v)}
                 format={(v) => v.toFixed(1)}
                 unit="mm"
               />
