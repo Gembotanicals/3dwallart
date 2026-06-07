@@ -9,9 +9,10 @@ import ExportBar from '@/components/3d/ExportBar';
 import ExportPanel from '@/components/export/ExportPanel';
 import ShareModal from '@/components/share/ShareModal';
 import { useEditorStore } from '@/lib/store';
+import type { PreviewMode } from '@/components/3d/ReliefViewer';
 
 // Dynamic import for the 3D viewer (SSR-incompatible)
-const ReliefViewer = dynamic(() => import('@/components/3d/ReliefViewer'), {
+const ReliefViewer = dynamic<{ previewMode: PreviewMode }>(() => import('@/components/3d/ReliefViewer'), {
   ssr: false,
   loading: () => (
     <div className="flex-1 flex items-center justify-center bg-[#0c1013]">
@@ -22,7 +23,7 @@ const ReliefViewer = dynamic(() => import('@/components/3d/ReliefViewer'), {
 
 type SaveStatus = 'saved' | 'saving' | 'error' | 'idle';
 
-function HUD() {
+function HUD({ previewMode }: { previewMode: PreviewMode }) {
   const img = useEditorStore((s) => s.img);
   const imgName = useEditorStore((s) => s.imgName);
   const settings = useEditorStore((s) => s.settings);
@@ -42,6 +43,7 @@ function HUD() {
       {imgName || 'image'} · {settings.gc}×{settings.gr} grid
       <br />
       <b className="text-accent2">{settings.out}</b>
+      {previewMode === 'all' ? ' · all tiles' : ` · tile ${settings.tcol}·${settings.trow}`}
       {settings.puzzleOn ? ' · snap-lock' : settings.join ? ' · interlocking' : ''}
       {settings.colorOn ? ` · ${settings.nc} colors` : ''}
       {' · drag/scroll'}
@@ -49,7 +51,7 @@ function HUD() {
   );
 }
 
-function SourcePreview() {
+function SourcePreview({ previewMode }: { previewMode: PreviewMode }) {
   const img = useEditorStore((s) => s.img);
   const heightGrid = useEditorStore((s) => s.heightGrid);
   const settings = useEditorStore((s) => s.settings);
@@ -80,9 +82,26 @@ function SourcePreview() {
       sx.drawImage(srcCanvas, ox, oy, dw, dh);
     }
 
-    // Draw selection rect
+    // Draw grid and selected tile.
     const tw = Math.floor(fw / settings.gc);
     const th = Math.floor(fh / settings.gr);
+    sx.strokeStyle = previewMode === 'all' ? '#30e0c0' : '#3d484f';
+    sx.lineWidth = 1;
+    for (let c = 1; c < settings.gc; c++) {
+      const x = ox + c * tw * s;
+      sx.beginPath();
+      sx.moveTo(x, oy);
+      sx.lineTo(x, oy + dh);
+      sx.stroke();
+    }
+    for (let r = 1; r < settings.gr; r++) {
+      const y = oy + r * th * s;
+      sx.beginPath();
+      sx.moveTo(ox, y);
+      sx.lineTo(ox + dw, y);
+      sx.stroke();
+    }
+
     const cx0 = (settings.tcol - 1) * tw;
     const cx1 = settings.tcol === settings.gc ? fw : settings.tcol * tw;
     const rTop = settings.gr - settings.trow;
@@ -92,7 +111,7 @@ function SourcePreview() {
     sx.strokeStyle = '#ff5c2b';
     sx.lineWidth = 2;
     sx.strokeRect(ox + cx0 * s, oy + cy0 * s, (cx1 - cx0) * s, (cy1 - cy0) * s);
-  }, [img, heightGrid, settings.tcol, settings.trow, settings.gc, settings.gr]);
+  }, [img, heightGrid, previewMode, settings.tcol, settings.trow, settings.gc, settings.gr]);
 
   if (!img) return null;
 
@@ -153,6 +172,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [loadError, setLoadError] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('tile');
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSettingsRef = useRef<string>('');
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -391,12 +411,16 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         <ControlPanel projectId={params.id} />
         <div className="flex-1 flex flex-col min-w-0 relative">
           <div className="flex-1 min-h-0 relative flex flex-col">
-            <ReliefViewer />
-            <HUD />
-            <SourcePreview />
+            <ReliefViewer previewMode={previewMode} />
+            <HUD previewMode={previewMode} />
+            <SourcePreview previewMode={previewMode} />
             <Toast />
           </div>
-          <ExportBar projectId={params.id} />
+          <ExportBar
+            projectId={params.id}
+            previewMode={previewMode}
+            onPreviewModeChange={setPreviewMode}
+          />
           <ExportPanel projectId={params.id} />
         </div>
       </div>

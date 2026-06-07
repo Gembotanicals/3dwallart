@@ -3,7 +3,17 @@
 import { useEditorStore } from '@/lib/store';
 import { captureThumbnail } from '@/lib/thumbnail';
 
-export default function ExportBar({ projectId }: { projectId: string }) {
+type PreviewMode = 'tile' | 'all';
+
+export default function ExportBar({
+  projectId,
+  previewMode,
+  onPreviewModeChange,
+}: {
+  projectId: string;
+  previewMode: PreviewMode;
+  onPreviewModeChange: (mode: PreviewMode) => void;
+}) {
   const geometry = useEditorStore((s) => s.geometry);
   const settings = useEditorStore((s) => s.settings);
   const img = useEditorStore((s) => s.img);
@@ -27,6 +37,28 @@ export default function ExportBar({ projectId }: { projectId: string }) {
   return (
     <div className="border-t border-line py-3 px-4 flex gap-3 items-center bg-panel flex-wrap">
       <span className="font-mono text-[10px] text-dim uppercase tracking-wider">Quick Download</span>
+      <div className="flex border border-line rounded-sm overflow-hidden">
+        <button
+          onClick={() => onPreviewModeChange('tile')}
+          className={`font-mono text-[11px] uppercase tracking-[0.5px] px-3 py-[10px] transition-colors ${
+            previewMode === 'tile'
+              ? 'bg-accent2 text-[#06201b] font-bold'
+              : 'bg-panel2 text-dim hover:text-ink'
+          }`}
+        >
+          Tile View
+        </button>
+        <button
+          onClick={() => onPreviewModeChange('all')}
+          className={`font-mono text-[11px] uppercase tracking-[0.5px] px-3 py-[10px] border-l border-line transition-colors ${
+            previewMode === 'all'
+              ? 'bg-accent2 text-[#06201b] font-bold'
+              : 'bg-panel2 text-dim hover:text-ink'
+          }`}
+        >
+          All Tiles
+        </button>
+      </div>
       <button
         disabled={!hasImage}
         onClick={handleExportTile}
@@ -52,16 +84,24 @@ export default function ExportBar({ projectId }: { projectId: string }) {
 
       <div className="font-mono text-[11px] text-dim ml-auto">
         {hasGeo ? (
-          <>
-            tile <b className="text-ink">{settings.tcol}·{settings.trow}</b>
-            &nbsp;&nbsp;
-            {geometry.tris.toLocaleString()} tris
-            &nbsp;&nbsp;
-            <b className="text-ink">
-              {geometry.bbox[0].toFixed(0)}×{geometry.bbox[1].toFixed(0)}×{geometry.bbox[2].toFixed(1)}
-            </b>
-            {' '}mm
-          </>
+          previewMode === 'all' ? (
+            <>
+              all tiles <b className="text-ink">{settings.gc}×{settings.gr}</b>
+              &nbsp;&nbsp;
+              <b className="text-ink">{settings.gc * settings.gr}</b> pieces
+            </>
+          ) : (
+            <>
+              tile <b className="text-ink">{settings.tcol}·{settings.trow}</b>
+              &nbsp;&nbsp;
+              {geometry.tris.toLocaleString()} tris
+              &nbsp;&nbsp;
+              <b className="text-ink">
+                {geometry.bbox[0].toFixed(0)}×{geometry.bbox[1].toFixed(0)}×{geometry.bbox[2].toFixed(1)}
+              </b>
+              {' '}mm
+            </>
+          )
         ) : (
           '—'
         )}
