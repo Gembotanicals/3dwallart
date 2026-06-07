@@ -374,7 +374,7 @@ function pushPrism(V: number[], rawPoly: [number, number][], zTop: number): void
   }
 }
 
-function snapClipPolygon(
+function puzzleLobePolygon(
   edgeAxis: 'x' | 'y',
   edgePos: number,
   edgeStart: number,
@@ -385,29 +385,25 @@ function snapClipPolygon(
 ): [number, number][] {
   const edgeLen = Math.max(1, edgeEnd - edgeStart);
   const center = edgeStart + edgeLen / 2;
-  const half = Math.max(3, Math.min(tabSize, edgeLen * 0.62) / 2);
-  const noseHalf = half * 0.62;
-  const shoulder = extent * 0.38;
+  const half = Math.max(3, Math.min(tabSize, edgeLen * 0.68) / 2);
+  const reach = Math.max(1, extent);
+  const steps = 24;
+  const points: [number, number][] = [];
 
-  if (edgeAxis === 'x') {
-    return [
-      [edgePos, center - half],
-      [edgePos + dir * shoulder, center - half],
-      [edgePos + dir * extent, center - noseHalf],
-      [edgePos + dir * extent, center + noseHalf],
-      [edgePos + dir * shoulder, center + half],
-      [edgePos, center + half],
-    ];
+  for (let i = 0; i <= steps; i++) {
+    const theta = -Math.PI / 2 + (Math.PI * i) / steps;
+    const along = center + half * Math.sin(theta);
+    const normal = edgePos + dir * reach * Math.cos(theta);
+    points.push(edgeAxis === 'x' ? [normal, along] : [along, normal]);
   }
 
-  return [
-    [center - half, edgePos],
-    [center - half, edgePos + dir * shoulder],
-    [center - noseHalf, edgePos + dir * extent],
-    [center + noseHalf, edgePos + dir * extent],
-    [center + half, edgePos + dir * shoulder],
-    [center + half, edgePos],
-  ];
+  return points;
+}
+
+function pointInPuzzleSocket(offset: number, normalDepth: number, halfSize: number, depth: number): boolean {
+  if (normalDepth < 0 || normalDepth > depth || Math.abs(offset) > halfSize) return false;
+  const ratio = offset / halfSize;
+  return normalDepth <= depth * Math.sqrt(Math.max(0, 1 - ratio * ratio));
 }
 
 function puzzleTab(
@@ -415,7 +411,7 @@ function puzzleTab(
   edgeStart: number, edgeEnd: number, dir: number,
   zTop: number, tabSize: number, extent: number
 ) {
-  pushPrism(V, snapClipPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent), zTop);
+  pushPrism(V, puzzleLobePolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent), zTop);
 }
 
 function puzzleBlank(
@@ -424,21 +420,12 @@ function puzzleBlank(
   zTop: number, tabSize: number, extent: number
 ) {
   const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => pushQuad(V, a, b, c, d);
-  const edgeLen = Math.max(1, edgeEnd - edgeStart);
-  const center = edgeStart + edgeLen / 2;
-  const half = Math.max(3, Math.min(tabSize, edgeLen * 0.68) / 2);
-  const a0 = center - half;
-  const a1 = center + half;
-  const back = edgePos + dir * extent;
+  const poly = puzzleLobePolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent);
 
-  if (edgeAxis === 'x') {
-    q([edgePos, a0, 0], [back, a0, 0], [back, a0, zTop], [edgePos, a0, zTop]);
-    q([back, a1, 0], [edgePos, a1, 0], [edgePos, a1, zTop], [back, a1, zTop]);
-    q([back, a0, 0], [back, a1, 0], [back, a1, zTop], [back, a0, zTop]);
-  } else {
-    q([a0, edgePos, 0], [a0, back, 0], [a0, back, zTop], [a0, edgePos, zTop]);
-    q([a1, back, 0], [a1, edgePos, 0], [a1, edgePos, zTop], [a1, back, zTop]);
-    q([a0, back, 0], [a1, back, 0], [a1, back, zTop], [a0, back, zTop]);
+  for (let i = 0; i < poly.length - 1; i++) {
+    const [x0, y0] = poly[i];
+    const [x1, y1] = poly[i + 1];
+    q([x0, y0, 0], [x1, y1, 0], [x1, y1, zTop], [x0, y0, zTop]);
   }
 }
 
@@ -550,10 +537,10 @@ export function buildGeometryServer(
   }
 
   const inSnapSocket = (cx: number, cy: number) => snapSockets.some((socket) => {
-    if (socket.edge === 'left') return cx <= socket.depth && Math.abs(cy - socket.center) <= socket.halfSize;
-    if (socket.edge === 'right') return cx >= W - socket.depth && Math.abs(cy - socket.center) <= socket.halfSize;
-    if (socket.edge === 'bottom') return cy <= socket.depth && Math.abs(cx - socket.center) <= socket.halfSize;
-    return cy >= H - socket.depth && Math.abs(cx - socket.center) <= socket.halfSize;
+    if (socket.edge === 'left') return pointInPuzzleSocket(cy - socket.center, cx, socket.halfSize, socket.depth);
+    if (socket.edge === 'right') return pointInPuzzleSocket(cy - socket.center, W - cx, socket.halfSize, socket.depth);
+    if (socket.edge === 'bottom') return pointInPuzzleSocket(cx - socket.center, cy, socket.halfSize, socket.depth);
+    return pointInPuzzleSocket(cx - socket.center, H - cy, socket.halfSize, socket.depth);
   });
 
   const inSnapTab = (cx: number, cy: number) => snapTabs.some((tab) => {
