@@ -75,6 +75,13 @@ interface EditorState {
 
 const EXPORT_RES = 420;
 
+function normalizeConnectorSettings(settings: ReliefSettings): ReliefSettings {
+  if (settings.puzzleOn && settings.join) {
+    return { ...settings, join: false };
+  }
+  return settings;
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   settings: { ...DEFAULT_SETTINGS },
   img: null,
@@ -91,7 +98,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   resetView: false,
 
   setSetting: (key, value) => {
-    set((state) => ({ settings: { ...state.settings, [key]: value } }));
+    set((state) => ({
+      settings: normalizeConnectorSettings({ ...state.settings, [key]: value }),
+    }));
     // After changing certain settings, recompute
     const s = get();
     if (['colorOn', 'nc', 'bandMode', 'relief', 'base', 'invert'].includes(key)) {
@@ -118,7 +127,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setTile: (col, row) => {
-    set((state) => ({ settings: { ...state.settings, tcol: col, trow: row } }));
+    set((state) => ({
+      settings: normalizeConnectorSettings({ ...state.settings, tcol: col, trow: row }),
+    }));
     if (get().img) get().refresh();
   },
 
@@ -220,7 +231,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setSettings: (newSettings) => {
     set((state) => {
-      const merged = { ...state.settings, ...newSettings };
+      const merged = normalizeConnectorSettings({ ...state.settings, ...newSettings });
       // Recompute colors/bands if relevant settings changed
       const colorKeys = ['colorOn', 'nc', 'bandMode', 'relief', 'base', 'invert'];
       const needsColorUpdate = colorKeys.some(k => k in newSettings);

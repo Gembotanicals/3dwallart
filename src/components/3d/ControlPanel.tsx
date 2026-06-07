@@ -123,6 +123,8 @@ function Note({ children }: { children: React.ReactNode }) {
   );
 }
 
+type ConnectorMode = 'off' | 'slide' | 'snap';
+
 /* ---- Control Panel ---- */
 
 export default function ControlPanel({ projectId }: { projectId?: string }) {
@@ -213,6 +215,20 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
   const edgeMapForGrid = (gc: number, gr: number) => (
     gc > 1 || gr > 1 ? generatePuzzleEdgeMap(gc, gr) : ''
   );
+
+  const connectorMode: ConnectorMode = settings.puzzleOn
+    ? 'snap'
+    : settings.join
+      ? 'slide'
+      : 'off';
+
+  const setConnectorMode = (mode: ConnectorMode) => {
+    setSettings({
+      join: mode === 'slide',
+      puzzleOn: mode === 'snap',
+      puzzleEdges: mode === 'snap' ? edgeMapForGrid(settings.gc, settings.gr) : settings.puzzleEdges,
+    });
+  };
 
   const updateGrid = (gc: number, gr: number) => {
     const updates: Partial<typeof settings> = {
@@ -411,73 +427,69 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
         </div>
       </Section>
 
-      {/* JOINING */}
+      {/* CONNECTORS */}
       <Section>
-        <SectionHeader>Joining (Support-Free)</SectionHeader>
+        <SectionHeader>Connector Style</SectionHeader>
         <div className="px-[18px] pb-[18px]">
-          <Checkbox
-            label="Bed-level interlocking edge"
-            checked={settings.join}
-            onChange={(v) => setSettings({ join: v, puzzleOn: v ? false : settings.puzzleOn })}
+          <SegmentedButton
+            options={[
+              { value: 'off', label: 'OFF' },
+              { value: 'slide', label: 'SLIDE TAB' },
+              { value: 'snap', label: 'SNAP-LOCK' },
+            ]}
+            value={connectorMode}
+            onChange={(v) => setConnectorMode(v as ConnectorMode)}
           />
-          <Note>
-            Tab on right/top edges, notch on left/bottom. Tabs carry the neighboring relief so the artwork fills the joint. Tiles slide together, print flat, and only seat the right way.
-          </Note>
 
-          <SliderRow
-            label="Tab width"
-            value={settings.tw}
-            min={12}
-            max={50}
-            step={1}
-            onChange={(v) => setSetting('tw', v)}
-            format={(v) => v.toFixed(0)}
-            unit="mm"
-          />
-          <SliderRow
-            label="Tab reach"
-            value={settings.to}
-            min={3}
-            max={14}
-            step={0.5}
-            onChange={(v) => setSetting('to', v)}
-            format={(v) => v.toFixed(1)}
-            unit="mm"
-          />
-          <SliderRow
-            label="Slide clearance"
-            value={settings.tc}
-            min={0.15}
-            max={0.5}
-            step={0.01}
-            onChange={(v) => setSetting('tc', v)}
-            format={(v) => v.toFixed(2)}
-            unit="mm"
-          />
-        </div>
-      </Section>
+          {connectorMode === 'off' && (
+            <Note>
+              Tiles export with straight edges.
+            </Note>
+          )}
 
-      {/* SNAP-LOCK CLIPS */}
-      <Section>
-        <SectionHeader>Snap-Lock Clips</SectionHeader>
-        <div className="px-[18px] pb-[18px]">
-          <Checkbox
-            label="Square clip/socket connectors"
-            checked={settings.puzzleOn}
-            onChange={(v) => {
-              setSettings({
-                puzzleOn: v,
-                join: v ? false : settings.join,
-                puzzleEdges: v ? edgeMapForGrid(settings.gc, settings.gr) : settings.puzzleEdges,
-              });
-            }}
-          />
-          <Note>
-            Bed-level clips protrude from one side of each seam and matching sockets are cut into the neighbor with print clearance, like modular wall panels.
-          </Note>
-
-          {settings.puzzleOn && (
+          {connectorMode === 'slide' && (
             <>
+              <Note>
+                A slide tab is added on right/top edges with a matching notch on left/bottom. Tabs carry the neighboring relief so the artwork fills the joint.
+              </Note>
+              <SliderRow
+                label="Tab width"
+                value={settings.tw}
+                min={12}
+                max={50}
+                step={1}
+                onChange={(v) => setSetting('tw', v)}
+                format={(v) => v.toFixed(0)}
+                unit="mm"
+              />
+              <SliderRow
+                label="Tab reach"
+                value={settings.to}
+                min={3}
+                max={14}
+                step={0.5}
+                onChange={(v) => setSetting('to', v)}
+                format={(v) => v.toFixed(1)}
+                unit="mm"
+              />
+              <SliderRow
+                label="Slide clearance"
+                value={settings.tc}
+                min={0.15}
+                max={0.5}
+                step={0.01}
+                onChange={(v) => setSetting('tc', v)}
+                format={(v) => v.toFixed(2)}
+                unit="mm"
+              />
+            </>
+          )}
+
+          {connectorMode === 'snap' && (
+            <>
+              <Note>
+                Square clips protrude from one side of each seam and matching sockets are cut into the neighbor with print clearance.
+              </Note>
               <SliderRow
                 label="Clip width"
                 value={settings.puzzleSize}
@@ -496,6 +508,16 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
                 step={0.5}
                 onChange={(v) => setSetting('puzzleExtent', v)}
                 format={(v) => v.toFixed(1)}
+                unit="mm"
+              />
+              <SliderRow
+                label="Fit clearance"
+                value={settings.tc}
+                min={0.15}
+                max={0.6}
+                step={0.01}
+                onChange={(v) => setSetting('tc', v)}
+                format={(v) => v.toFixed(2)}
                 unit="mm"
               />
             </>
