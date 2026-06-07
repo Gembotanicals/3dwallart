@@ -349,21 +349,81 @@ function polygonArea(poly: [number, number][]): number {
   return area / 2;
 }
 
+function pointInTriangle2D(
+  p: [number, number],
+  a: [number, number],
+  b: [number, number],
+  c: [number, number]
+): boolean {
+  const area = (p1: [number, number], p2: [number, number], p3: [number, number]) =>
+    (p2[0] - p1[0]) * (p3[1] - p1[1]) - (p2[1] - p1[1]) * (p3[0] - p1[0]);
+  const ab = area(a, b, p);
+  const bc = area(b, c, p);
+  const ca = area(c, a, p);
+  const eps = 1e-7;
+  return ab >= -eps && bc >= -eps && ca >= -eps;
+}
+
+function triangulatePolygon(poly: [number, number][]): [number, number, number][] {
+  if (poly.length < 3) return [];
+  const remaining = poly.map((_, i) => i);
+  const triangles: [number, number, number][] = [];
+  let guard = 0;
+
+  while (remaining.length > 3 && guard < poly.length * poly.length) {
+    let clipped = false;
+    for (let i = 0; i < remaining.length; i++) {
+      const prev = remaining[(i - 1 + remaining.length) % remaining.length];
+      const curr = remaining[i];
+      const next = remaining[(i + 1) % remaining.length];
+      const a = poly[prev], b = poly[curr], c = poly[next];
+      const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+      if (cross <= 1e-7) continue;
+
+      const hasPointInside = remaining.some((idx) => (
+        idx !== prev &&
+        idx !== curr &&
+        idx !== next &&
+        pointInTriangle2D(poly[idx], a, b, c)
+      ));
+      if (hasPointInside) continue;
+
+      triangles.push([prev, curr, next]);
+      remaining.splice(i, 1);
+      clipped = true;
+      break;
+    }
+    if (!clipped) break;
+    guard++;
+  }
+
+  if (remaining.length === 3) {
+    triangles.push([remaining[0], remaining[1], remaining[2]]);
+  }
+
+  if (!triangles.length) {
+    for (let i = 1; i < poly.length - 1; i++) triangles.push([0, i, i + 1]);
+  }
+
+  return triangles;
+}
+
 function pushPrism(V: number[], rawPoly: [number, number][], zTop: number): void {
   const poly = polygonArea(rawPoly) < 0 ? [...rawPoly].reverse() : rawPoly;
+  const triangles = triangulatePolygon(poly);
   const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => pushQuad(V, a, b, c, d);
 
-  for (let i = 1; i < poly.length - 1; i++) {
-    const a: Vec3 = [poly[0][0], poly[0][1], zTop];
-    const b: Vec3 = [poly[i][0], poly[i][1], zTop];
-    const c: Vec3 = [poly[i + 1][0], poly[i + 1][1], zTop];
+  for (const [ia, ib, ic] of triangles) {
+    const a: Vec3 = [poly[ia][0], poly[ia][1], zTop];
+    const b: Vec3 = [poly[ib][0], poly[ib][1], zTop];
+    const c: Vec3 = [poly[ic][0], poly[ic][1], zTop];
     V.push(...a, ...b, ...c);
   }
 
-  for (let i = 1; i < poly.length - 1; i++) {
-    const a: Vec3 = [poly[0][0], poly[0][1], 0];
-    const b: Vec3 = [poly[i + 1][0], poly[i + 1][1], 0];
-    const c: Vec3 = [poly[i][0], poly[i][1], 0];
+  for (const [ia, ib, ic] of triangles) {
+    const a: Vec3 = [poly[ia][0], poly[ia][1], 0];
+    const b: Vec3 = [poly[ic][0], poly[ic][1], 0];
+    const c: Vec3 = [poly[ib][0], poly[ib][1], 0];
     V.push(...a, ...b, ...c);
   }
 
@@ -374,7 +434,69 @@ function pushPrism(V: number[], rawPoly: [number, number][], zTop: number): void
   }
 }
 
-function puzzleLobePolygon(
+function puzzleClickMouthHalf(tabSize: number, edgeLen: number): number {
+  const bulbHalf = Math.max(4, Math.min(tabSize, edgeLen * 0.68) / 2);
+  return Math.max(2.4, bulbHalf * 0.48);
+}
+
+function cubicPoint(
+  p0: [number, number],
+  c1: [number, number],
+  c2: [number, number],
+  p1: [number, number],
+  t: number
+): [number, number] {
+  const u = 1 - t;
+  return [
+    u * u * u * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p1[0],
+    u * u * u * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p1[1],
+  ];
+}
+
+function pushBezier(
+  points: [number, number][],
+  p0: [number, number],
+  c1: [number, number],
+  c2: [number, number],
+  p1: [number, number],
+  steps: number
+): void {
+  for (let i = 1; i <= steps; i++) {
+    points.push(cubicPoint(p0, c1, c2, p1, i / steps));
+  }
+}
+
+function puzzleClickProfileLocal(tabSize: number, edgeLen: number, extent: number): [number, number][] {
+  const bulbHalf = Math.max(4, Math.min(tabSize, edgeLen * 0.68) / 2);
+  const neckHalf = puzzleClickMouthHalf(tabSize, edgeLen);
+  const reach = Math.max(1, extent);
+  const neckDepth = Math.max(1, Math.min(reach * 0.34, reach - 0.7));
+  const headDepth = neckDepth + (reach - neckDepth) * 0.45;
+  const handle = Math.max(0.8, reach * 0.18);
+  const points: [number, number][] = [[0, -neckHalf], [neckDepth, -neckHalf]];
+
+  pushBezier(points, [neckDepth, -neckHalf], [neckDepth + handle, -neckHalf], [headDepth - handle, -bulbHalf], [headDepth, -bulbHalf], 6);
+  pushBezier(points, [headDepth, -bulbHalf], [reach - handle, -bulbHalf], [reach, -bulbHalf * 0.42], [reach, 0], 6);
+  pushBezier(points, [reach, 0], [reach, bulbHalf * 0.42], [reach - handle, bulbHalf], [headDepth, bulbHalf], 6);
+  pushBezier(points, [headDepth, bulbHalf], [headDepth - handle, bulbHalf], [neckDepth + handle, neckHalf], [neckDepth, neckHalf], 6);
+  points.push([0, neckHalf]);
+  return points;
+}
+
+function pointInPolygon2D(point: [number, number], poly: [number, number][]): boolean {
+  let inside = false;
+  const [px, py] = point;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    const intersects = ((yi > py) !== (yj > py)) &&
+      px < ((xj - xi) * (py - yi)) / ((yj - yi) || 1e-9) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function puzzleClickPolygon(
   edgeAxis: 'x' | 'y',
   edgePos: number,
   edgeStart: number,
@@ -385,25 +507,11 @@ function puzzleLobePolygon(
 ): [number, number][] {
   const edgeLen = Math.max(1, edgeEnd - edgeStart);
   const center = edgeStart + edgeLen / 2;
-  const half = Math.max(3, Math.min(tabSize, edgeLen * 0.68) / 2);
-  const reach = Math.max(1, extent);
-  const steps = 24;
-  const points: [number, number][] = [];
-
-  for (let i = 0; i <= steps; i++) {
-    const theta = -Math.PI / 2 + (Math.PI * i) / steps;
-    const along = center + half * Math.sin(theta);
-    const normal = edgePos + dir * reach * Math.cos(theta);
-    points.push(edgeAxis === 'x' ? [normal, along] : [along, normal]);
-  }
-
-  return points;
-}
-
-function pointInPuzzleSocket(offset: number, normalDepth: number, halfSize: number, depth: number): boolean {
-  if (normalDepth < 0 || normalDepth > depth || Math.abs(offset) > halfSize) return false;
-  const ratio = offset / halfSize;
-  return normalDepth <= depth * Math.sqrt(Math.max(0, 1 - ratio * ratio));
+  return puzzleClickProfileLocal(tabSize, edgeLen, extent).map(([normal, along]) => {
+    const x = edgeAxis === 'x' ? edgePos + dir * normal : center + along;
+    const y = edgeAxis === 'x' ? center + along : edgePos + dir * normal;
+    return [x, y];
+  });
 }
 
 function puzzleTab(
@@ -411,7 +519,7 @@ function puzzleTab(
   edgeStart: number, edgeEnd: number, dir: number,
   zTop: number, tabSize: number, extent: number
 ) {
-  pushPrism(V, puzzleLobePolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent), zTop);
+  pushPrism(V, puzzleClickPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent), zTop);
 }
 
 function puzzleBlank(
@@ -420,7 +528,7 @@ function puzzleBlank(
   zTop: number, tabSize: number, extent: number
 ) {
   const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => pushQuad(V, a, b, c, d);
-  const poly = puzzleLobePolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent);
+  const poly = puzzleClickPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent);
 
   for (let i = 0; i < poly.length - 1; i++) {
     const [x0, y0] = poly[i];
@@ -517,30 +625,32 @@ export function buildGeometryServer(
       (n) => cx > n.x0 && cx < n.x1 && cy > n.y0 && cy < n.y1
     );
 
-  const snapSockets: { edge: 'left' | 'bottom' | 'right' | 'top'; center: number; halfSize: number; depth: number }[] = [];
+  const snapSockets: { edge: 'left' | 'bottom' | 'right' | 'top'; center: number; profile: [number, number][] }[] = [];
   const snapTabs: { edge: 'left' | 'bottom' | 'right' | 'top'; center: number; halfSize: number; depth: number }[] = [];
   const socketHalfX = Math.min((puzzleSz + 2 * clr) / 2, Math.max(3, W * 0.34));
   const socketHalfY = Math.min((puzzleSz + 2 * clr) / 2, Math.max(3, H * 0.34));
-  const tabHalfX = Math.min(puzzleSz / 2, Math.max(3, W * 0.31));
-  const tabHalfY = Math.min(puzzleSz / 2, Math.max(3, H * 0.31));
+  const tabHalfX = puzzleClickMouthHalf(puzzleSz, W);
+  const tabHalfY = puzzleClickMouthHalf(puzzleSz, H);
   const socketDepth = puzzleExt + clr;
+  const socketProfileX = puzzleClickProfileLocal(socketHalfX * 2, W, socketDepth);
+  const socketProfileY = puzzleClickProfileLocal(socketHalfY * 2, H, socketDepth);
 
   if (usePuzzle) {
     if (rightEdge.type === 'tab') snapTabs.push({ edge: 'right', center: H / 2, halfSize: tabHalfY, depth: puzzleExt });
-    if (rightEdge.type === 'blank') snapSockets.push({ edge: 'right', center: H / 2, halfSize: socketHalfY, depth: socketDepth });
+    if (rightEdge.type === 'blank') snapSockets.push({ edge: 'right', center: H / 2, profile: socketProfileY });
     if (leftEdge.type === 'tab') snapTabs.push({ edge: 'left', center: H / 2, halfSize: tabHalfY, depth: puzzleExt });
-    if (leftEdge.type === 'blank') snapSockets.push({ edge: 'left', center: H / 2, halfSize: socketHalfY, depth: socketDepth });
+    if (leftEdge.type === 'blank') snapSockets.push({ edge: 'left', center: H / 2, profile: socketProfileY });
     if (topEdge.type === 'tab') snapTabs.push({ edge: 'top', center: W / 2, halfSize: tabHalfX, depth: puzzleExt });
-    if (topEdge.type === 'blank') snapSockets.push({ edge: 'top', center: W / 2, halfSize: socketHalfX, depth: socketDepth });
+    if (topEdge.type === 'blank') snapSockets.push({ edge: 'top', center: W / 2, profile: socketProfileX });
     if (bottomEdge.type === 'tab') snapTabs.push({ edge: 'bottom', center: W / 2, halfSize: tabHalfX, depth: puzzleExt });
-    if (bottomEdge.type === 'blank') snapSockets.push({ edge: 'bottom', center: W / 2, halfSize: socketHalfX, depth: socketDepth });
+    if (bottomEdge.type === 'blank') snapSockets.push({ edge: 'bottom', center: W / 2, profile: socketProfileX });
   }
 
   const inSnapSocket = (cx: number, cy: number) => snapSockets.some((socket) => {
-    if (socket.edge === 'left') return pointInPuzzleSocket(cy - socket.center, cx, socket.halfSize, socket.depth);
-    if (socket.edge === 'right') return pointInPuzzleSocket(cy - socket.center, W - cx, socket.halfSize, socket.depth);
-    if (socket.edge === 'bottom') return pointInPuzzleSocket(cx - socket.center, cy, socket.halfSize, socket.depth);
-    return pointInPuzzleSocket(cx - socket.center, H - cy, socket.halfSize, socket.depth);
+    if (socket.edge === 'left') return pointInPolygon2D([cx, cy - socket.center], socket.profile);
+    if (socket.edge === 'right') return pointInPolygon2D([W - cx, cy - socket.center], socket.profile);
+    if (socket.edge === 'bottom') return pointInPolygon2D([cy, cx - socket.center], socket.profile);
+    return pointInPolygon2D([H - cy, cx - socket.center], socket.profile);
   });
 
   const inSnapTab = (cx: number, cy: number) => snapTabs.some((tab) => {

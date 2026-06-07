@@ -488,10 +488,10 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
           {connectorMode === 'snap' && (
             <>
               <Note>
-                Square clips protrude from one side of each seam and matching sockets are cut into the neighbor with print clearance.
+                Narrow-throat tabs widen into rounded heads, then seat into matching blank sockets with print clearance.
               </Note>
               <SliderRow
-                label="Clip width"
+                label="Tab head width"
                 value={settings.puzzleSize}
                 min={10}
                 max={40}
@@ -501,7 +501,7 @@ export default function ControlPanel({ projectId }: { projectId?: string }) {
                 unit="mm"
               />
               <SliderRow
-                label="Clip reach"
+                label="Tab depth"
                 value={settings.puzzleExtent}
                 min={4}
                 max={14}
