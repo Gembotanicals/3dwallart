@@ -3,5 +3,11 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  return NextResponse.json({ status: 'ok', timestamp: new Date().toISOString() });
+  return NextResponse.json({
+    status: 'ok',
+    sourceMarker: 'connector-style-v2',
+    railwayGitCommit: process.env.RAILWAY_GIT_COMMIT_SHA || null,
+    railwayGitBranch: process.env.RAILWAY_GIT_BRANCH || null,
+    timestamp: new Date().toISOString(),
+  });
 }
