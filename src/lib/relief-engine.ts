@@ -421,6 +421,22 @@ function resolvePuzzleHeadDepth(headDepth: number | undefined, extent: number): 
   return Math.max(1.5, Math.min(value, Math.max(1.5, reach - 1.1)));
 }
 
+function pushArc(
+  points: [number, number][],
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  start: number,
+  end: number,
+  steps: number
+): void {
+  for (let i = 1; i <= steps; i++) {
+    const t = start + (end - start) * (i / steps);
+    points.push([cx + Math.cos(t) * rx, cy + Math.sin(t) * ry]);
+  }
+}
+
 function cubicPoint(
   p0: [number, number],
   c1: [number, number],
@@ -459,13 +475,18 @@ function puzzleClickProfileLocal(tabSize: number, edgeLen: number, extent: numbe
   const headSpan = Math.max(0.45, reach - headStart);
   const shoulderHandle = Math.max(0.35, Math.min(reach * 0.16, shoulderSpan * 0.45));
   const headHandle = Math.max(0.35, Math.min(reach * 0.18, headSpan * 0.46));
-  const points: [number, number][] = [[0, -neckHalf], [neckDepth, -neckHalf]];
+  const mouthRound = Math.max(0.7, Math.min(neckDepth * 0.62, neckHalf * 0.72, reach * 0.16));
+  const throatFlat = Math.max(0.15, neckDepth - mouthRound);
+  const points: [number, number][] = [[0, -neckHalf + mouthRound]];
 
-  pushBezier(points, [neckDepth, -neckHalf], [neckDepth + shoulderHandle, -neckHalf], [headStart - shoulderHandle, -bulbHalf], [headStart, -bulbHalf], 6);
-  pushBezier(points, [headStart, -bulbHalf], [reach - headHandle, -bulbHalf], [reach, -bulbHalf * 0.42], [reach, 0], 6);
-  pushBezier(points, [reach, 0], [reach, bulbHalf * 0.42], [reach - headHandle, bulbHalf], [headStart, bulbHalf], 6);
-  pushBezier(points, [headStart, bulbHalf], [headStart - shoulderHandle, bulbHalf], [neckDepth + shoulderHandle, neckHalf], [neckDepth, neckHalf], 6);
-  points.push([0, neckHalf]);
+  pushArc(points, mouthRound, -neckHalf + mouthRound, mouthRound, mouthRound, Math.PI, Math.PI * 1.5, 5);
+  points.push([throatFlat, -neckHalf]);
+
+  pushBezier(points, [throatFlat, -neckHalf], [neckDepth + shoulderHandle, -neckHalf], [headStart - shoulderHandle, -bulbHalf], [headStart, -bulbHalf], 8);
+  pushBezier(points, [headStart, -bulbHalf], [reach - headHandle, -bulbHalf], [reach, -bulbHalf * 0.42], [reach, 0], 8);
+  pushBezier(points, [reach, 0], [reach, bulbHalf * 0.42], [reach - headHandle, bulbHalf], [headStart, bulbHalf], 8);
+  pushBezier(points, [headStart, bulbHalf], [headStart - shoulderHandle, bulbHalf], [neckDepth + shoulderHandle, neckHalf], [throatFlat, neckHalf], 8);
+  pushArc(points, mouthRound, neckHalf - mouthRound, mouthRound, mouthRound, Math.PI / 2, Math.PI, 5);
   return points;
 }
 
