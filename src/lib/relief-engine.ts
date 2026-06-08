@@ -381,15 +381,21 @@ function triangulatePolygon(poly: [number, number][]): [number, number, number][
   return triangles;
 }
 
-function pushPrism(V: number[], rawPoly: [number, number][], zTop: number): void {
+type TopHeight = number | ((x: number, y: number) => number);
+
+function topHeightAt(zTop: TopHeight, x: number, y: number): number {
+  return typeof zTop === 'function' ? zTop(x, y) : zTop;
+}
+
+function pushPrism(V: number[], rawPoly: [number, number][], zTop: TopHeight): void {
   const poly = polygonArea(rawPoly) < 0 ? [...rawPoly].reverse() : rawPoly;
   const triangles = triangulatePolygon(poly);
   const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => pushQuad(V, a, b, c, d);
 
   for (const [ia, ib, ic] of triangles) {
-    const a: Vec3 = [poly[ia][0], poly[ia][1], zTop];
-    const b: Vec3 = [poly[ib][0], poly[ib][1], zTop];
-    const c: Vec3 = [poly[ic][0], poly[ic][1], zTop];
+    const a: Vec3 = [poly[ia][0], poly[ia][1], topHeightAt(zTop, poly[ia][0], poly[ia][1])];
+    const b: Vec3 = [poly[ib][0], poly[ib][1], topHeightAt(zTop, poly[ib][0], poly[ib][1])];
+    const c: Vec3 = [poly[ic][0], poly[ic][1], topHeightAt(zTop, poly[ic][0], poly[ic][1])];
     V.push(...a, ...b, ...c);
   }
 
@@ -403,7 +409,12 @@ function pushPrism(V: number[], rawPoly: [number, number][], zTop: number): void
   for (let i = 0; i < poly.length; i++) {
     const [x0, y0] = poly[i];
     const [x1, y1] = poly[(i + 1) % poly.length];
-    q([x0, y0, 0], [x1, y1, 0], [x1, y1, zTop], [x0, y0, zTop]);
+    q(
+      [x0, y0, 0],
+      [x1, y1, 0],
+      [x1, y1, topHeightAt(zTop, x1, y1)],
+      [x0, y0, topHeightAt(zTop, x0, y0)]
+    );
   }
 }
 
@@ -476,7 +487,7 @@ function puzzleClickProfileLocal(tabSize: number, edgeLen: number, extent: numbe
   const shoulderHandle = Math.max(0.35, Math.min(reach * 0.16, shoulderSpan * 0.45));
   const headHandle = Math.max(0.35, Math.min(reach * 0.18, headSpan * 0.46));
   const mouthRound = Math.max(0.7, Math.min(neckDepth * 0.62, neckHalf * 0.72, reach * 0.16));
-  const throatFlat = Math.max(0.15, neckDepth - mouthRound);
+  const throatFlat = Math.max(mouthRound + 0.15, neckDepth);
   const points: [number, number][] = [[0, -neckHalf + mouthRound]];
 
   pushArc(points, mouthRound, -neckHalf + mouthRound, mouthRound, mouthRound, Math.PI, Math.PI * 1.5, 5);
@@ -525,7 +536,7 @@ function puzzleClickPolygon(
 function puzzleTab(
   V: number[], edgeAxis: 'x' | 'y', edgePos: number,
   edgeStart: number, edgeEnd: number, dir: number,
-  zTop: number, tabSize: number, extent: number, headDepth?: number
+  zTop: TopHeight, tabSize: number, extent: number, headDepth?: number
 ) {
   pushPrism(V, puzzleClickPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent, headDepth), zTop);
 }
@@ -533,7 +544,7 @@ function puzzleTab(
 function puzzleBlank(
   V: number[], edgeAxis: 'x' | 'y', edgePos: number,
   edgeStart: number, edgeEnd: number, dir: number,
-  zTop: number, tabSize: number, extent: number, headDepth?: number
+  zTop: TopHeight, tabSize: number, extent: number, headDepth?: number
 ) {
   const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => pushQuad(V, a, b, c, d);
   const poly = puzzleClickPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent, headDepth);
@@ -541,7 +552,12 @@ function puzzleBlank(
   for (let i = 0; i < poly.length - 1; i++) {
     const [x0, y0] = poly[i];
     const [x1, y1] = poly[i + 1];
-    q([x0, y0, 0], [x1, y1, 0], [x1, y1, zTop], [x0, y0, zTop]);
+    q(
+      [x0, y0, 0],
+      [x1, y1, 0],
+      [x1, y1, topHeightAt(zTop, x1, y1)],
+      [x0, y0, topHeightAt(zTop, x0, y0)]
+    );
   }
 }
 
@@ -649,6 +665,28 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
     return cy >= H - Math.max(1, tab.depth) && Math.abs(cx - tab.center) <= tab.halfSize;
   });
 
+  const clampLocal = (value: number, max: number) => Math.max(0, Math.min(max, value));
+  const tileTop = (c: number, r: number, lx: number, ly: number): number => (
+    base + sampleTileHeight(
+      hg,
+      c,
+      r,
+      clampLocal(lx, W),
+      clampLocal(ly, H),
+      s.gc,
+      s.gr,
+      W,
+      H
+    ) * relief
+  );
+  const currentTileTop = (x: number, y: number): number => tileTop(s.tcol, s.trow, x, y);
+  const snapTabTop = (edge: 'right' | 'left' | 'top' | 'bottom'): ((x: number, y: number) => number) => {
+    if (edge === 'right') return (x, y) => tileTop(s.tcol + 1, s.trow, x - W, y);
+    if (edge === 'left') return (x, y) => tileTop(s.tcol - 1, s.trow, W + x, y);
+    if (edge === 'top') return (x, y) => tileTop(s.tcol, s.trow + 1, x, y - H);
+    return (x, y) => tileTop(s.tcol, s.trow - 1, x, H + y);
+  };
+
   // top relief
   for (let y = 0; y < ny - 1; y++) {
     for (let x = 0; x < nx - 1; x++) {
@@ -707,36 +745,34 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
       reliefTab(V, hg, s.tcol, s.trow + 1, tabX, H, tw, to, dx, dy, (u, v) => [tabX + u, v], s);
     }
   } else {
-    // Snap-lock edges: tab protrudes at bed height, blank cuts a matching through-socket.
-    const tabZ = base;
-    const socketZ = base + relief;
+    // Snap-lock tabs carry the neighboring relief surface; blanks cut to the local surface.
     const socketWidth = puzzleSz + 2 * clr;
     const socketReach = puzzleExt + clr;
     const socketHeadDepth = puzzleHeadDepth + clr;
     
     // Right edge (x = W)
     if (rightEdge.type === 'tab') {
-      puzzleTab(V, 'x', W, 0, H, rightEdge.dir, tabZ, puzzleSz, puzzleExt, puzzleHeadDepth);
+      puzzleTab(V, 'x', W, 0, H, rightEdge.dir, snapTabTop('right'), puzzleSz, puzzleExt, puzzleHeadDepth);
     } else if (rightEdge.type === 'blank') {
-      puzzleBlank(V, 'x', W, 0, H, rightEdge.dir, socketZ, socketWidth, socketReach, socketHeadDepth);
+      puzzleBlank(V, 'x', W, 0, H, rightEdge.dir, currentTileTop, socketWidth, socketReach, socketHeadDepth);
     }
     // Left edge (x = 0)
     if (leftEdge.type === 'tab') {
-      puzzleTab(V, 'x', 0, 0, H, leftEdge.dir, tabZ, puzzleSz, puzzleExt, puzzleHeadDepth);
+      puzzleTab(V, 'x', 0, 0, H, leftEdge.dir, snapTabTop('left'), puzzleSz, puzzleExt, puzzleHeadDepth);
     } else if (leftEdge.type === 'blank') {
-      puzzleBlank(V, 'x', 0, 0, H, leftEdge.dir, socketZ, socketWidth, socketReach, socketHeadDepth);
+      puzzleBlank(V, 'x', 0, 0, H, leftEdge.dir, currentTileTop, socketWidth, socketReach, socketHeadDepth);
     }
     // Top edge (y = H)
     if (topEdge.type === 'tab') {
-      puzzleTab(V, 'y', H, 0, W, topEdge.dir, tabZ, puzzleSz, puzzleExt, puzzleHeadDepth);
+      puzzleTab(V, 'y', H, 0, W, topEdge.dir, snapTabTop('top'), puzzleSz, puzzleExt, puzzleHeadDepth);
     } else if (topEdge.type === 'blank') {
-      puzzleBlank(V, 'y', H, 0, W, topEdge.dir, socketZ, socketWidth, socketReach, socketHeadDepth);
+      puzzleBlank(V, 'y', H, 0, W, topEdge.dir, currentTileTop, socketWidth, socketReach, socketHeadDepth);
     }
     // Bottom edge (y = 0)
     if (bottomEdge.type === 'tab') {
-      puzzleTab(V, 'y', 0, 0, W, bottomEdge.dir, tabZ, puzzleSz, puzzleExt, puzzleHeadDepth);
+      puzzleTab(V, 'y', 0, 0, W, bottomEdge.dir, snapTabTop('bottom'), puzzleSz, puzzleExt, puzzleHeadDepth);
     } else if (bottomEdge.type === 'blank') {
-      puzzleBlank(V, 'y', 0, 0, W, bottomEdge.dir, socketZ, socketWidth, socketReach, socketHeadDepth);
+      puzzleBlank(V, 'y', 0, 0, W, bottomEdge.dir, currentTileTop, socketWidth, socketReach, socketHeadDepth);
     }
   }
 

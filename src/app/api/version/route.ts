@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   return NextResponse.json({
-    sourceMarker: "snap-rounded-edges-v1",
+    sourceMarker: "snap-flush-relief-v1",
     railwayGitCommit: process.env.RAILWAY_GIT_COMMIT_SHA || null,
     railwayGitBranch: process.env.RAILWAY_GIT_BRANCH || null,
     railwayEnvironment: process.env.RAILWAY_ENVIRONMENT_NAME || null,
