@@ -418,6 +418,30 @@ function pushPrism(V: number[], rawPoly: [number, number][], zTop: TopHeight): v
   }
 }
 
+function pushPrismShell(V: number[], rawPoly: [number, number][], zTop: TopHeight): void {
+  const poly = polygonArea(rawPoly) < 0 ? [...rawPoly].reverse() : rawPoly;
+  const triangles = triangulatePolygon(poly);
+  const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => pushQuad(V, a, b, c, d);
+
+  for (const [ia, ib, ic] of triangles) {
+    const a: Vec3 = [poly[ia][0], poly[ia][1], 0];
+    const b: Vec3 = [poly[ic][0], poly[ic][1], 0];
+    const c: Vec3 = [poly[ib][0], poly[ib][1], 0];
+    V.push(...a, ...b, ...c);
+  }
+
+  for (let i = 0; i < poly.length; i++) {
+    const [x0, y0] = poly[i];
+    const [x1, y1] = poly[(i + 1) % poly.length];
+    q(
+      [x0, y0, 0],
+      [x1, y1, 0],
+      [x1, y1, topHeightAt(zTop, x1, y1)],
+      [x0, y0, topHeightAt(zTop, x0, y0)]
+    );
+  }
+}
+
 function puzzleClickMouthHalf(tabSize: number, edgeLen: number): number {
   const bulbHalf = Math.max(4, Math.min(tabSize, edgeLen * 0.68) / 2);
   return Math.max(2.4, bulbHalf * 0.48);
@@ -533,12 +557,76 @@ function puzzleClickPolygon(
   });
 }
 
+function profileHalfAt(profile: [number, number][], normal: number): number {
+  const hits: number[] = [];
+  for (let i = 0; i < profile.length; i++) {
+    const [x0, y0] = profile[i];
+    const [x1, y1] = profile[(i + 1) % profile.length];
+    if (Math.abs(x1 - x0) < 1e-9) {
+      if (Math.abs(normal - x0) < 1e-6) {
+        hits.push(y0, y1);
+      }
+      continue;
+    }
+    const minX = Math.min(x0, x1);
+    const maxX = Math.max(x0, x1);
+    if (normal < minX - 1e-6 || normal > maxX + 1e-6) continue;
+    const t = (normal - x0) / (x1 - x0);
+    if (t < -1e-6 || t > 1 + 1e-6) continue;
+    hits.push(y0 + (y1 - y0) * t);
+  }
+  if (hits.length < 2) return 0;
+  return Math.max(0, (Math.max(...hits) - Math.min(...hits)) / 2);
+}
+
+function pushPuzzleTerrainTop(
+  V: number[],
+  edgeAxis: 'x' | 'y',
+  edgePos: number,
+  edgeStart: number,
+  edgeEnd: number,
+  dir: number,
+  zTop: TopHeight,
+  tabSize: number,
+  extent: number,
+  headDepth: number | undefined,
+  normalStep: number,
+  alongStep: number
+): void {
+  const edgeLen = Math.max(1, edgeEnd - edgeStart);
+  const center = edgeStart + edgeLen / 2;
+  const profile = puzzleClickProfileLocal(tabSize, edgeLen, extent, headDepth);
+  const maxHalf = Math.max(...profile.map(([, along]) => Math.abs(along)));
+  const normalSegments = Math.max(4, Math.ceil(Math.max(1, extent) / Math.max(0.7, normalStep)));
+  const alongSegments = Math.max(4, Math.ceil((maxHalf * 2) / Math.max(0.7, alongStep)));
+  const mapLocal = (normal: number, along: number): Vec3 => {
+    const x = edgeAxis === 'x' ? edgePos + dir * normal : center + along;
+    const y = edgeAxis === 'x' ? center + along : edgePos + dir * normal;
+    return [x, y, topHeightAt(zTop, x, y)];
+  };
+  const vertex = (i: number, j: number): Vec3 => {
+    const normal = (i / normalSegments) * Math.max(1, extent);
+    const half = Math.max(0.02, profileHalfAt(profile, normal));
+    const along = -half + (j / alongSegments) * half * 2;
+    return mapLocal(normal, along);
+  };
+
+  for (let i = 0; i < normalSegments; i++) {
+    for (let j = 0; j < alongSegments; j++) {
+      pushQuad(V, vertex(i, j), vertex(i + 1, j), vertex(i + 1, j + 1), vertex(i, j + 1));
+    }
+  }
+}
+
 function puzzleTab(
   V: number[], edgeAxis: 'x' | 'y', edgePos: number,
   edgeStart: number, edgeEnd: number, dir: number,
-  zTop: TopHeight, tabSize: number, extent: number, headDepth?: number
+  zTop: TopHeight, tabSize: number, extent: number, headDepth?: number,
+  normalStep = 1,
+  alongStep = 1
 ) {
-  pushPrism(V, puzzleClickPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent, headDepth), zTop);
+  pushPrismShell(V, puzzleClickPolygon(edgeAxis, edgePos, edgeStart, edgeEnd, dir, tabSize, extent, headDepth), zTop);
+  pushPuzzleTerrainTop(V, edgeAxis, edgePos, edgeStart, edgeEnd, dir, zTop, tabSize, extent, headDepth, normalStep, alongStep);
 }
 
 function puzzleBlank(
@@ -752,25 +840,25 @@ export function buildGeometry(hg: HeightGrid, s: ReliefSettings): GeometryResult
     
     // Right edge (x = W)
     if (rightEdge.type === 'tab') {
-      puzzleTab(V, 'x', W, 0, H, rightEdge.dir, snapTabTop('right'), puzzleSz, puzzleExt, puzzleHeadDepth);
+      puzzleTab(V, 'x', W, 0, H, rightEdge.dir, snapTabTop('right'), puzzleSz, puzzleExt, puzzleHeadDepth, dx, dy);
     } else if (rightEdge.type === 'blank') {
       puzzleBlank(V, 'x', W, 0, H, rightEdge.dir, currentTileTop, socketWidth, socketReach, socketHeadDepth);
     }
     // Left edge (x = 0)
     if (leftEdge.type === 'tab') {
-      puzzleTab(V, 'x', 0, 0, H, leftEdge.dir, snapTabTop('left'), puzzleSz, puzzleExt, puzzleHeadDepth);
+      puzzleTab(V, 'x', 0, 0, H, leftEdge.dir, snapTabTop('left'), puzzleSz, puzzleExt, puzzleHeadDepth, dx, dy);
     } else if (leftEdge.type === 'blank') {
       puzzleBlank(V, 'x', 0, 0, H, leftEdge.dir, currentTileTop, socketWidth, socketReach, socketHeadDepth);
     }
     // Top edge (y = H)
     if (topEdge.type === 'tab') {
-      puzzleTab(V, 'y', H, 0, W, topEdge.dir, snapTabTop('top'), puzzleSz, puzzleExt, puzzleHeadDepth);
+      puzzleTab(V, 'y', H, 0, W, topEdge.dir, snapTabTop('top'), puzzleSz, puzzleExt, puzzleHeadDepth, dy, dx);
     } else if (topEdge.type === 'blank') {
       puzzleBlank(V, 'y', H, 0, W, topEdge.dir, currentTileTop, socketWidth, socketReach, socketHeadDepth);
     }
     // Bottom edge (y = 0)
     if (bottomEdge.type === 'tab') {
-      puzzleTab(V, 'y', 0, 0, W, bottomEdge.dir, snapTabTop('bottom'), puzzleSz, puzzleExt, puzzleHeadDepth);
+      puzzleTab(V, 'y', 0, 0, W, bottomEdge.dir, snapTabTop('bottom'), puzzleSz, puzzleExt, puzzleHeadDepth, dy, dx);
     } else if (bottomEdge.type === 'blank') {
       puzzleBlank(V, 'y', 0, 0, W, bottomEdge.dir, currentTileTop, socketWidth, socketReach, socketHeadDepth);
     }
